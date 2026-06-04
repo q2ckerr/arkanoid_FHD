@@ -59,16 +59,24 @@ class Round1(BaseRound):
         random.shuffle(powerup_classes)
 
         # Randomly select the indexes for the bricks that will contain
-        # powerups.
-        powerup_indexes = random.sample(range(52), len(powerup_classes) - 4)
-        powerup_indexes += random.sample(range(52, 65), 4)
+        # powerups. The number of bricks is NUM_COLOURS * NUM_COLS.
+        # The original Arkanoid level 1 uses 13 columns across 5 coloured
+        # rows. The brick images are scaled to make 13 columns fit exactly
+        # into the play area width (see BRICK_WIDTH_ADJUSTMENT in utils),
+        # so we can use the original arcade column count.
+        num_cols = 13
+        total_bricks = len(colours) * num_cols
+        first_row_count = num_cols * (len(colours) - 1)
+        powerup_indexes = random.sample(range(first_row_count),
+                                        len(powerup_classes) - 4)
+        powerup_indexes += random.sample(range(first_row_count, total_bricks), 4)
         powerup_indexes.sort()
 
         bricks, count = [], 0
 
         # Each coloured brick forms a new layer.
         for colour in colours:
-            for _ in range(13):
+            for _ in range(num_cols):
                 powerup_class = None
 
                 if count in powerup_indexes:

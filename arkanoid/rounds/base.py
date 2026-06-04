@@ -110,6 +110,12 @@ class BaseRound:
         brick. The top left most brick is considered position (0, 0). This
         allows clients to avoid having to work with actual screen positions.
 
+        Bricks are placed flush against the *left* wall of the play area
+        (matching the original Arkanoid game, where the first column of
+        bricks is hard up against the left side wall). The brick grid is
+        *not* centred — the right side of the play area simply has
+        whatever empty space is left over.
+
         Note that this method will modify the brick's rect attribute once
         the brick has been set.
 
@@ -123,13 +129,15 @@ class BaseRound:
         Returns:
             The blitted brick.
         """
-        offset_x = brick.rect.width * x
-        offset_y = brick.rect.height * y
+        brick_width = brick.rect.width
+        brick_height = brick.rect.height
 
-        rect = self.screen.blit(brick.image, (self.edges.left.rect.x +
-                                self.edges.left.rect.width + offset_x,
-                                self.edges.top.rect.y +
-                                self.edges.top.rect.height + offset_y))
+        target_x = (self.edges.left.rect.x + self.edges.left.rect.width
+                    + x * brick_width)
+        target_y = (self.edges.top.rect.y + self.edges.top.rect.height
+                    + y * brick_height)
+
+        rect = self.screen.blit(brick.image, (target_x, target_y))
         brick.rect = rect
         return brick
 
@@ -173,13 +181,19 @@ class BaseRound:
             A named tuple with attributes 'left', 'right', and 'top' that
             reference the corresponding edge sprites.
         """
+        from arkanoid.game import LAYOUT
+        
         edges = collections.namedtuple('edge', 'left right top')
         left_edge = SideEdge('left')
         right_edge = SideEdge('right')
         top_edge = TopEdge()
-        left_edge.rect.topleft = 0, self.top_offset
-        right_edge.rect.topright = self.screen.get_width(), self.top_offset
-        top_edge.rect.topleft = left_edge.rect.width, self.top_offset
+        
+        # Use the layout offset for proper positioning
+        left_edge.rect.topleft = (LAYOUT.offset_x, self.top_offset)
+        right_edge.rect.topright = (
+            self.screen.get_width() - LAYOUT.offset_x, self.top_offset)
+        top_edge.rect.topleft = (
+            LAYOUT.offset_x + left_edge.rect.width, self.top_offset)
         return edges(left_edge, right_edge, top_edge)
 
     def _create_bricks(self):

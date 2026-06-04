@@ -3,8 +3,9 @@ import logging
 
 import pygame
 
-from arkanoid.utils.util import load_png
-from arkanoid.utils.util import load_png_sequence
+from arkanoid.utils.util import (BRICK_WIDTH_ADJUSTMENT,
+                                 load_png,
+                                 load_png_sequence)
 
 LOG = logging.getLogger(__name__)
 
@@ -50,9 +51,33 @@ class Brick(pygame.sprite.Sprite):
         # Load the brick graphic.
         self.image, self.rect = load_png('brick_{}'.format(brick_colour.name))
 
-        # Load the images/rects required for any animation.
-        self._image_sequence = [image for image, _ in load_png_sequence(
-            'brick_{}'.format(brick_colour.name))]
+        # Scale the brick *horizontally* so that BRICK_PLAY_AREA_COLUMNS
+        # bricks fit exactly into the play area width. At 1920x1080 the
+        # play area is 750 px wide and a freshly loaded brick is 58 px,
+        # so 13 * 58 = 754 px overflows by 4 px; the scale factor
+        # (BRICK_WIDTH_ADJUSTMENT) corrects that. The height is left
+        # unchanged so bricks stay proportional. The factor is
+        # resolution-independent because both the play area and the
+        # brick scale by the same GAME_SCALE.
+        target_width = int(round(
+            self.image.get_width() * BRICK_WIDTH_ADJUSTMENT))
+        if target_width != self.image.get_width():
+            self.image = pygame.transform.scale(
+                self.image, (target_width, self.image.get_height()))
+            self.rect = self.image.get_rect()
+
+        # Load the images/rects required for any animation. Animation
+        # frames are also re-scaled to the same width so the destruction
+        # animation matches the static brick.
+        self._image_sequence = []
+        for anim_image, _ in load_png_sequence(
+                'brick_{}'.format(brick_colour.name)):
+            if (target_width != anim_image.get_width()
+                    and anim_image.get_height() > 0):
+                anim_image = pygame.transform.scale(
+                    anim_image,
+                    (target_width, anim_image.get_height()))
+            self._image_sequence.append(anim_image)
         self._animation = None
 
         # The number of ball collisions with this brick.

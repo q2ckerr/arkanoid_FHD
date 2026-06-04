@@ -2,6 +2,7 @@ import pygame
 
 from arkanoid.rounds.base import (BaseRound,
                                   BLUE)
+from arkanoid.rounds.round6 import Round6
 from arkanoid.sprites.brick import (Brick,
                                     BrickColour)
 from arkanoid.sprites.enemy import EnemyType
@@ -28,6 +29,7 @@ class Round5(BaseRound):
         super().__init__(top_offset)
 
         self.name = 'Round 5'
+        self.next_round = Round6
         self.enemy_type = EnemyType.cone
         self.num_enemies = 3
 

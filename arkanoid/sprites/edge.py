@@ -20,10 +20,10 @@ DOOR_OPEN_DELAY_MAX = 600  # Frames
 # The time the door remains open.
 DOOR_OPEN_TIME = 20  # Frames
 
-# Map of doors to their x,y coordinates. The coordinates identify the
-# top left corner of the door.
-COORDS = {DOOR_TOP_LEFT: (115, 150),
-          DOOR_TOP_RIGHT: (415, 150)}
+# Map of doors to their x,y offsets. The coordinates identify the
+# top left corner of the door relative to the top edge sprite.
+COORDS_OFFSETS = {DOOR_TOP_LEFT: (115, 150),
+                   DOOR_TOP_RIGHT: (415, 150)}
 
 
 class TopEdge(pygame.sprite.Sprite):
@@ -114,7 +114,14 @@ class TopEdge(pygame.sprite.Sprite):
         # Add a random delay before opening the door.
         delay = random.choice(range(DOOR_OPEN_DELAY_MIN, DOOR_OPEN_DELAY_MAX))
         delay += self._update_count
-        self._open_queue.append((delay, door, lambda: on_open(COORDS[door])))
+        
+        # Calculate screen coordinates for the door
+        from arkanoid.game import LAYOUT
+        door_offset_x, door_offset_y = COORDS_OFFSETS[door]
+        screen_x = self.rect.left + int(door_offset_x * LAYOUT.scale)
+        screen_y = self.rect.bottom  # Spawn at the bottom of the top edge
+        
+        self._open_queue.append((delay, door, lambda: on_open((screen_x, screen_y))))
         self._open_queue.sort(key=operator.itemgetter(0))
 
     def cancel_open_door(self):

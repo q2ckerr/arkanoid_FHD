@@ -64,6 +64,17 @@ class Paddle(pygame.sprite.Sprite):
         # A list of no-args callables that will be called on ball collision.
         self.ball_collide_callbacks = []
 
+        # Whether the gamepad is currently the *active* input source.
+        # The gamepad is a polled device, so there is no analogue of
+        # the keyboard's KEYUP event to tell us "the player has
+        # released the stick". We treat the stick going from
+        # deflected back to centred as a single "release" event,
+        # flipping this flag back to False so the keyboard can take
+        # over again. Without this, just plugging a controller in
+        # would cause the keyboard to stop working the next time
+        # the stick returned to its centre position.
+        self._gamepad_active = False
+
         # The current paddle state.
         self._state = NormalState(self)
 
@@ -72,6 +83,57 @@ class Paddle(pygame.sprite.Sprite):
 
         # Delegate to our active state for specific animation/behaviour.
         self._state.update()
+
+        # === Gamepad analog-stick movement =============================
+        # The left stick of the connected gamepad (axis 0) can move
+        # the paddle left/right. Unlike the keyboard, the gamepad
+        # is a polled device, so we cannot rely on a KEYUP-equivalent
+        # event to clear ``self._move`` when the player releases the
+        # stick. Instead we track whether the gamepad is currently
+        # the *active* input source with ``self._gamepad_active``:
+        #
+        #   * stick deflected -> the gamepad takes over, set
+        #     ``self._move`` to the stick's direction and remember
+        #     that the gamepad is active;
+        #   * stick centred while the gamepad was active -> the
+        #     player has released the stick, stop the paddle and
+        #     mark the gamepad as inactive so the keyboard can take
+        #     over again;
+        #   * stick centred while the gamepad was NOT active ->
+        #     leave ``self._move`` alone so the keyboard's last
+        #     value (set by KEYDOWN/KEYUP handlers) is preserved
+        #     and a player using the keyboard on a machine with a
+        #     controller plugged in is not clobbered every frame.
+        #
+        # Importing here (rather than at module load) avoids a
+        # circular import between the gamepad wrapper and the
+        # paddle sprite.
+        from arkanoid.game import get_gamepad
+        gamepad = get_gamepad()
+        if gamepad.connected:
+            axis_x = gamepad.axis_x
+            if axis_x < -0.1 or axis_x > 0.1:
+                # Stick deflected - the gamepad is now the active
+                # source of paddle motion. Set ``self._move`` to the
+                # stick's direction at the paddle's full speed.
+                self._gamepad_active = True
+                if axis_x < -0.1:
+                    self._move = -self.speed
+                else:
+                    self._move = self.speed
+            elif self._gamepad_active:
+                # The stick was deflected last frame but is centred
+                # now - that's the player's "release". Stop the
+                # paddle and mark the gamepad as inactive so the
+                # keyboard (if any) regains control.
+                self._gamepad_active = False
+                self._move = 0
+            # else: stick centred and the gamepad was never
+            # active - leave ``self._move`` alone so the
+            # keyboard's last setting is preserved.
+        # else: no gamepad connected, the keyboard KEYDOWN/KEYUP
+        # event handlers in this module are the only thing that
+        # mutates ``self._move``.
 
         if self._move:
             # Continuously move the paddle when the offset is non-zero.
@@ -461,10 +523,26 @@ class LaserState(PaddleState):
     def update(self):
         """Animate the paddle from normal to laser, or from laser to normal.
 
-        Once converted to laser, start monitoring for spacebar presses.
+        Once converted to laser, monitor for fire input every frame:
+          * the keyboard's Space key, handled via the KEYUP
+            handler registered in :meth:`_convert_to_laser`;
+          * the gamepad's A / Cross button (button 0), which is
+            *polled* each frame here rather than via an event,
+            because pygame does not dispatch KEYUP events for
+            gamepad buttons - so the KEYUP path on its own would
+            never see a pure-gamepad fire press.
         """
         if not self._to_laser and not self._from_laser:
             self._pulsator.update()
+            # === Gamepad fire =========================================
+            # Poll the gamepad for the A / Cross button. ``fire_pressed``
+            # returns True only on the rising edge of the press, so we
+            # won't fire on every frame the button is held - and we
+            # don't need the user to also be pressing a keyboard key
+            # to generate a KEYUP event for the handler to fire from.
+            from arkanoid.game import get_gamepad
+            if get_gamepad().fire_pressed:
+                self._spawn_bullets()
 
         if self._to_laser:
             self._convert_to_laser()
@@ -477,7 +555,11 @@ class LaserState(PaddleState):
         except StopIteration:
             # Conversion finished.
             self._to_laser = False
-            # Start monitoring for spacebar presses for firing bullets.
+            # Start monitoring for spacebar releases for firing
+            # bullets. The gamepad A button is *polled* in
+            # :meth:`update` rather than registered as an event
+            # handler, because pygame does not generate KEYUP
+            # events for gamepad buttons.
             receiver.register_handler(pygame.KEYUP, self._fire)
 
     def _convert_from_laser(self):
@@ -518,31 +600,41 @@ class LaserState(PaddleState):
         receiver.unregister_handler(self._fire)
 
     def _fire(self, event):
-        """Event handler that fires bullets from the paddle when the 
-        spacebar is pressed.
+        """Event handler that fires bullets from the paddle when the
+        spacebar is released (KEYUP).
+
+        The gamepad's A / Cross button is *not* handled here - the
+        laser state's :meth:`update` polls the gamepad every frame
+        for the rising edge of that button. This handler exists
+        solely for the keyboard Space key: pygame only fires KEYUP
+        events for keyboard input, not for gamepad button input.
         """
         if event.key == pygame.K_SPACE:
-            self._bullets = [bullet for bullet in self._bullets if
-                             bullet.visible]
-            # Fire the bullets, only allowing max 4 in the air at once.
-            if len(self._bullets) < 3:
-                # Create the bullet sprites. We fire two bullets at once.
-                left, top = self.paddle.rect.bottomleft
-                bullet1 = LaserBullet(self._game, position=(left + 10, top))
-                bullet2 = LaserBullet(self._game, position=(
-                    left + self.paddle.rect.width - 10, top))
+            self._spawn_bullets()
 
-                # Keep track of the bullets we're fired.
-                self._bullets.append(bullet1)
-                self._bullets.append(bullet2)
+    def _spawn_bullets(self):
+        """Release a pair of laser bullets from the paddle."""
+        self._bullets = [bullet for bullet in self._bullets if
+                         bullet.visible]
+        # Fire the bullets, only allowing max 4 in the air at once.
+        if len(self._bullets) < 3:
+            # Create the bullet sprites. We fire two bullets at once.
+            left, top = self.paddle.rect.bottomleft
+            bullet1 = LaserBullet(self._game, position=(left + 10, top))
+            bullet2 = LaserBullet(self._game, position=(
+                left + self.paddle.rect.width - 10, top))
 
-                # Allow the bullets to be displayed.
-                self._game.sprites.append(bullet1)
-                self._game.sprites.append(bullet2)
+            # Keep track of the bullets we're fired.
+            self._bullets.append(bullet1)
+            self._bullets.append(bullet2)
 
-                # Release them.
-                bullet1.release()
-                bullet2.release()
+            # Allow the bullets to be displayed.
+            self._game.sprites.append(bullet1)
+            self._game.sprites.append(bullet2)
+
+            # Release them.
+            bullet1.release()
+            bullet2.release()
 
 
 class LaserBullet(pygame.sprite.Sprite):

@@ -14,6 +14,30 @@ from arkanoid.sprites.paddle import (LaserBullet,
 
 class TestPaddle(TestCase):
 
+    def setUp(self):
+        # The paddle's update() polls the gamepad wrapper every
+        # frame. We don't want a stray "connected" real gamepad
+        # (or a real pygame.joystick.get_count() returning a
+        # truthy value in the test environment) overriding
+        # ``self._move = 0`` and clobbering the keyboard-driven
+        # movement the tests are trying to exercise - so patch
+        # ``get_gamepad`` to a stub whose ``connected`` is
+        # False. This makes the paddle's gamepad branch a no-op
+        # and the keyboard branch the sole source of motion,
+        # which is what these tests were written against.
+        self._gamepad_patcher = patch('arkanoid.game.get_gamepad')
+        mock_get_gamepad = self._gamepad_patcher.start()
+        mock_gamepad = Mock()
+        mock_gamepad.connected = False
+        mock_gamepad.axis_x = 0.0
+        mock_gamepad.fire_pressed = False
+        mock_gamepad.start_pressed = False
+        mock_gamepad.release_pressed = False
+        mock_get_gamepad.return_value = mock_gamepad
+
+    def tearDown(self):
+        self._gamepad_patcher.stop()
+
     @patch('arkanoid.sprites.paddle.load_png_sequence')
     @patch('arkanoid.sprites.paddle.load_png')
     @patch('arkanoid.sprites.paddle.pygame')
@@ -142,6 +166,107 @@ class TestPaddle(TestCase):
 
         self.assertEqual(mock_rect.center, 'the centre')
 
+    @patch('arkanoid.sprites.paddle.load_png_sequence')
+    @patch('arkanoid.sprites.paddle.load_png')
+    @patch('arkanoid.sprites.paddle.pygame')
+    def test_keyboard_works_when_gamepad_connected_but_idle(
+            self, mock_pygame, mock_load_png, mock_load_png_sequence):
+        """A controller that is plugged in but whose stick is
+        centred (the common case for a player using the keyboard)
+        must NOT clobber the keyboard's last setting of
+        ``self._move`` every frame.
+        """
+        mock_image, mock_rect, mock_area = (Mock(), Mock(), Mock())
+        mock_load_png.return_value = mock_image, mock_rect
+        mock_pygame.Rect.return_value = mock_area
+        mock_area.contains.return_value = True
+
+        # Simulate "controller plugged in but not being used".
+        self._gamepad_patcher.stop()
+        self._gamepad_patcher = patch('arkanoid.game.get_gamepad')
+        mock_get_gamepad = self._gamepad_patcher.start()
+        mock_gamepad = Mock()
+        mock_gamepad.connected = True
+        mock_gamepad.axis_x = 0.0
+        mock_get_gamepad.return_value = mock_gamepad
+
+        paddle = Paddle()
+        paddle.move_left()
+        paddle.update()
+
+        # The keyboard's move_left() must still take effect -
+        # the gamepad branch must NOT have reset self._move to 0.
+        mock_rect.move.assert_called_once_with(-10, 0)
+
+    @patch('arkanoid.sprites.paddle.load_png_sequence')
+    @patch('arkanoid.sprites.paddle.load_png')
+    @patch('arkanoid.sprites.paddle.pygame')
+    def test_gamepad_takes_over_when_stick_deflected(
+            self, mock_pygame, mock_load_png, mock_load_png_sequence):
+        """A deflected stick must take over the paddle's motion
+        regardless of the keyboard's last state.
+        """
+        mock_image, mock_rect, mock_area = (Mock(), Mock(), Mock())
+        mock_load_png.return_value = mock_image, mock_rect
+        mock_pygame.Rect.return_value = mock_area
+        mock_area.contains.return_value = True
+
+        self._gamepad_patcher.stop()
+        self._gamepad_patcher = patch('arkanoid.game.get_gamepad')
+        mock_get_gamepad = self._gamepad_patcher.start()
+        mock_gamepad = Mock()
+        mock_gamepad.connected = True
+        mock_gamepad.axis_x = -1.0
+        mock_get_gamepad.return_value = mock_gamepad
+
+        paddle = Paddle()
+        paddle.move_right()  # Set keyboard to right...
+        paddle.update()      # ...but gamepad stick is deflected left,
+                             # so the paddle should move left.
+        self.assertTrue(paddle._gamepad_active)
+        mock_rect.move.assert_called_once_with(-10, 0)
+
+    @patch('arkanoid.sprites.paddle.load_png_sequence')
+    @patch('arkanoid.sprites.paddle.load_png')
+    @patch('arkanoid.sprites.paddle.pygame')
+    def test_paddle_stops_when_gamepad_stick_released(
+            self, mock_pygame, mock_load_png, mock_load_png_sequence):
+        """When the stick is released (returns to centre after
+        being deflected), the paddle must stop moving and the
+        gamepad must be marked inactive so the keyboard can take
+        over again.
+        """
+        mock_image, mock_rect, mock_area = (Mock(), Mock(), Mock())
+        mock_load_png.return_value = mock_image, mock_rect
+        mock_pygame.Rect.return_value = mock_area
+        mock_area.contains.return_value = True
+
+        self._gamepad_patcher.stop()
+        self._gamepad_patcher = patch('arkanoid.game.get_gamepad')
+        mock_get_gamepad = self._gamepad_patcher.start()
+        mock_gamepad = Mock()
+        mock_gamepad.connected = True
+        mock_get_gamepad.return_value = mock_gamepad
+
+        paddle = Paddle()
+
+        # Frame 1: stick deflected left -> gamepad takes over.
+        mock_gamepad.axis_x = -1.0
+        paddle.update()
+        self.assertTrue(paddle._gamepad_active)
+        self.assertEqual(paddle._move, -10)
+        mock_rect.move.assert_called_with(-10, 0)
+
+        # Frame 2: stick released (centred) -> paddle stops and
+        # the gamepad is marked inactive.
+        mock_rect.move.reset_mock()
+        mock_gamepad.axis_x = 0.0
+        paddle.update()
+        self.assertFalse(paddle._gamepad_active)
+        self.assertEqual(paddle._move, 0)
+        # self._move == 0 means no .move() call on the rect.
+        self.assertEqual(mock_rect.move.call_count, 0)
+
     def test_bounce_strategy(self):
         angles = []
         paddle = pygame.Rect(100, 600, 60, 15)
@@ -160,6 +285,26 @@ class TestPaddle(TestCase):
 
 
 class TestLaserState(TestCase):
+
+    def setUp(self):
+        # The laser state's update() polls the gamepad for the
+        # A / Cross button. We stub the gamepad here so the
+        # tests, which exercise either the conversion animation
+        # or the keyboard-driven fire path, are not affected by
+        # a stray "connected" real gamepad in the test
+        # environment firing phantom bullets.
+        self._gamepad_patcher = patch('arkanoid.game.get_gamepad')
+        mock_get_gamepad = self._gamepad_patcher.start()
+        mock_gamepad = Mock()
+        mock_gamepad.connected = False
+        mock_gamepad.axis_x = 0.0
+        mock_gamepad.fire_pressed = False
+        mock_gamepad.start_pressed = False
+        mock_gamepad.release_pressed = False
+        mock_get_gamepad.return_value = mock_gamepad
+
+    def tearDown(self):
+        self._gamepad_patcher.stop()
 
     @patch('arkanoid.sprites.paddle._PaddlePulsator')
     @patch('arkanoid.sprites.paddle.receiver')
@@ -382,6 +527,24 @@ class TestLaserState(TestCase):
 
 
 class TestLaserBullet(TestCase):
+
+    def setUp(self):
+        # The laser bullet class itself does not touch the
+        # gamepad, but ``Bullet``-related infrastructure in the
+        # surrounding module does. Stub the gamepad here so that
+        # any indirect access (e.g. via ``update``) is a no-op.
+        self._gamepad_patcher = patch('arkanoid.game.get_gamepad')
+        mock_get_gamepad = self._gamepad_patcher.start()
+        mock_gamepad = Mock()
+        mock_gamepad.connected = False
+        mock_gamepad.axis_x = 0.0
+        mock_gamepad.fire_pressed = False
+        mock_gamepad.start_pressed = False
+        mock_gamepad.release_pressed = False
+        mock_get_gamepad.return_value = mock_gamepad
+
+    def tearDown(self):
+        self._gamepad_patcher.stop()
 
     @patch('arkanoid.sprites.paddle.load_png')
     @patch('arkanoid.sprites.paddle.pygame')

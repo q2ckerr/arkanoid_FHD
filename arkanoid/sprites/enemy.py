@@ -144,8 +144,22 @@ class Enemy(pygame.sprite.Sprite):
         Returns:
             A 3-element tuple: the itertools.cycle object representing the
             animated sequence, the maximum width, the maximum height.
+        Raises:
+            ValueError:
+                If no ``<prefix>_*.png`` files are present in the
+                graphics directory. Without this guard the cycle
+                would be created around an empty iterable, and the
+                first ``next()`` call in ``update()`` would raise an
+                opaque ``StopIteration`` deep inside the game loop.
         """
         sequence = load_png_sequence(filename_prefix)
+        if not sequence:
+            raise ValueError(
+                'No animation frames found for enemy type with '
+                'filename prefix %r. Expected files named '
+                '%r_1.png, %r_2.png, ... in the graphics '
+                'directory.' % (filename_prefix, filename_prefix,
+                                filename_prefix))
         max_width, max_height = 0, 0
 
         for image, rect in sequence:

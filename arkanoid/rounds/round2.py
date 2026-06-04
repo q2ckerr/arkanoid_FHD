@@ -61,15 +61,24 @@ class Round2(BaseRound):
 
         # Create a dict structure with the brick index as the key, and
         # powerup class as the value.
-        first_row_powerup_indexes = dict(zip(random.sample(range(13),
+        # The original Arkanoid level 2 uses 13 columns: a 13-brick
+        # bottom row with a triangle of 0+1+...+12 = 78 bricks above
+        # it. The brick images are scaled to make 13 columns fit
+        # exactly into the play area width (see BRICK_WIDTH_ADJUSTMENT
+        # in utils), so we can use the original arcade column count.
+        num_cols = 13
+        first_row_powerup_indexes = dict(zip(random.sample(range(num_cols),
                                              len(first_row_powerups)),
                                              first_row_powerups))
-        remaining_powerup_indexes = dict(zip(random.sample(range(91),
+        # The remaining bricks form a triangle above the first row.
+        # The total count is 0+1+...+(num_cols-1) = num_cols*(num_cols-1)/2.
+        remaining_count = num_cols * (num_cols - 1) // 2
+        remaining_powerup_indexes = dict(zip(random.sample(range(remaining_count),
                                              len(remaining_powerups)),
                                              remaining_powerups))
 
         x, count = 0, 0
-        for i in reversed(range(13)):
+        for i in reversed(range(num_cols)):
             # Create the first row brick.
             powerup = first_row_powerup_indexes.get(i)
             y = self._BRICK_START_ROW

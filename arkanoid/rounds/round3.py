@@ -57,36 +57,43 @@ class Round3(BaseRound):
             A pygame.sprite.Group of bricks.
         """
 
+        # The original Arkanoid level 3 uses 13 columns across 8 rows
+        # (a series of horizontal stripes with single-brick highlights).
+        # The brick images are scaled to make 13 columns fit exactly
+        # into the play area width (see BRICK_WIDTH_ADJUSTMENT in
+        # utils), so we can use the original arcade column count.
+        num_cols = 13
+
         rows = []
         # Row 1
-        rows += [BrickColour.green] * 13
+        rows += [BrickColour.green] * num_cols
         # Row 2
         rows += [BrickColour.white] * 3
-        rows += [BrickColour.gold] * 10
+        rows += [BrickColour.gold] * (num_cols - 3)
         # Row 3
         rows += [BrickColour.red] * 5
         rows += [(BrickColour.red, DuplicatePowerUp)]
-        rows += [BrickColour.red] * 7
+        rows += [BrickColour.red] * (num_cols - 6)
         # Row 4
-        rows += [BrickColour.gold] * 10
+        rows += [BrickColour.gold] * (num_cols - 3)
         rows += [BrickColour.white] * 3
         # Row 5
         rows += [BrickColour.pink] * 4
         rows += [(BrickColour.pink, DuplicatePowerUp)]
         rows += [BrickColour.pink] * 3
         rows += [(BrickColour.pink, ExtraLifePowerUp)]
-        rows += [BrickColour.pink] * 4
+        rows += [BrickColour.pink] * (num_cols - 9)
         # Row 6
         rows += [BrickColour.blue] * 3
-        rows += [BrickColour.gold] * 10
+        rows += [BrickColour.gold] * (num_cols - 3)
         # Row 7
         rows += [BrickColour.cyan] * 2
         rows += [(BrickColour.cyan,  CatchPowerUp)]
         rows += [BrickColour.cyan] * 3
         rows += [(BrickColour.cyan,  ExtraLifePowerUp)]
-        rows += [BrickColour.cyan] * 6
+        rows += [BrickColour.cyan] * (num_cols - 7)
         # Row 8
-        rows += [BrickColour.gold] * 10
+        rows += [BrickColour.gold] * (num_cols - 3)
         rows += [(BrickColour.cyan,  CatchPowerUp)]
         rows += [BrickColour.cyan] * 2
 
@@ -94,7 +101,7 @@ class Round3(BaseRound):
         x, y = 0, self._TOP_ROW_START
 
         for i, row in enumerate(rows):
-            if i and i % 13 == 0:
+            if i and i % num_cols == 0:
                 # New row
                 y += 2
                 x = 0

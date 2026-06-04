@@ -3,6 +3,35 @@ import os
 
 import pygame
 
+# Global game scale factor for sprite scaling
+GAME_SCALE = 1.0
+
+# === Brick width tuning =====================================================
+# Number of brick columns that completely fill the play area width. When a
+# brick grid has this many columns, the bricks should span the play area
+# edge-to-edge with no gap. With fewer columns, the bricks remain flush
+# with the left wall and the empty space is on the right (matching the
+# original Arkanoid game).
+BRICK_PLAY_AREA_COLUMNS = 13
+
+# Horizontal scale factor applied to a freshly loaded brick image so that
+# BRICK_PLAY_AREA_COLUMNS bricks fit exactly into the play area width.
+# This corrects the small discrepancy between the original brick width
+# and the play area width (e.g. 13 * 58 = 754 px at 1920x1080, but the
+# play area is only 750 px wide). The factor is resolution-independent
+# because both the play area and the brick scale by the same GAME_SCALE,
+# so the ratio is the same at any resolution.
+BRICK_WIDTH_ADJUSTMENT = 750.0 / (BRICK_PLAY_AREA_COLUMNS * 58)
+
+def set_game_scale(scale):
+    """Set the global scale factor for sprite scaling.
+    
+    Args:
+        scale (float): Scale factor to apply to sprite images
+    """
+    global GAME_SCALE
+    GAME_SCALE = scale
+
 
 HIGH_SCORE_FILE = os.path.join(os.path.expanduser('~'), '.arkanoid')
 
@@ -31,6 +60,12 @@ def load_png(filename):
         image = image.convert()
     else:
         image = image.convert_alpha()
+
+    # Apply global scaling if specified
+    if GAME_SCALE != 1.0:
+        new_size = (int(image.get_width() * GAME_SCALE),
+                    int(image.get_height() * GAME_SCALE))
+        image = pygame.transform.scale(image, new_size)
 
     return image, image.get_rect()
 
