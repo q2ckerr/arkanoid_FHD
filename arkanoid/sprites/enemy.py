@@ -42,7 +42,6 @@ class EnemyType(enum.Enum):
     cone = 'enemy_cone'
     molecule = 'enemy_molecule'
     pyramid = 'enemy_pyramid'
-    sphere = 'enemy_sphere'
 
 
 class Enemy(pygame.sprite.Sprite):

@@ -21,6 +21,8 @@ pygame events directly. The wrapper:
     on controllers that expose a dedicated Start button)
   - B / Circle button (button 1): release the ball (press once to
     launch it from the paddle at the start of a round)
+  - Back / View / Select button (button 6): toggle pause while a
+    round is in progress (the analog of pressing P on the keyboard)
 
 If no joystick is connected the wrapper is a no-op: the rest of
 the game can keep calling its methods and reading its attributes
@@ -46,6 +48,15 @@ RELEASE_BUTTON = 1
 # The index of the "Start" button. This is button 7 on the
 # XInput layout, which is what most modern controllers expose.
 START_BUTTON = 7
+# The index of the "Back / View / Select" button. This is
+# button 6 on the XInput layout. On Xbox controllers this is the
+# View button (the one with two overlapping rectangles), on
+# PlayStation 4 this is the Share button and on PlayStation 5
+# it is the Create button. We use it as the dedicated
+# "menu" / "pause" button - the analog of pressing P on the
+# keyboard. Picking button 6 keeps it separate from the
+# already-used Start button (button 7) on the start screen.
+MENU_BUTTON = 6
 
 # The horizontal axis of the left analog stick (axis 0 on every
 # standard layout). The D-pad is exposed as a "hat" on most
@@ -262,3 +273,18 @@ class Gamepad:
         space on the keyboard).
         """
         return self._button_pressed(RELEASE_BUTTON)
+
+    @property
+    def menu_pressed(self):
+        """Whether the menu / pause button (Back / View / Select)
+        was just pressed this frame.
+
+        The game uses this to toggle the in-game pause overlay -
+        the analog of pressing P on the keyboard. Reads button
+        6 (Back / View / Select on the XInput layout) so the
+        dedicated menu-style button on most controllers can be
+        used for pause without conflicting with the Start button
+        (button 7), which is wired to the start-screen "begin
+        game" action.
+        """
+        return self._button_pressed(MENU_BUTTON)

@@ -161,7 +161,7 @@ class Layout:
         Returns:
             The integer pixel value at the new resolution.
         """
-        return self.offset_y + int(value * self.scale_y)
+        return self.offset_y + int(value * self.scale)
 
 
 # A single shared layout instance used throughout the module. Recompute
@@ -275,24 +275,20 @@ class Arkanoid:
             # connected, so it is safe to call on every frame.
             get_gamepad().refresh()
 
+            # Always clear the screen to black so the side-area
+            # starfield and the play-area background are drawn on
+            # a clean base every frame.
+            self._screen.fill((0, 0, 0))
+
+            # Draw the header (logo + score titles) every frame so
+            # it stays visible above both the start screen and the
+            # gameplay area.
+            self._display_logo()
+            self._display_score_titles()
+            self._display_high_score(self._high_score)
+
             if not self._game:
-                # Clear the screen to black before drawing the
-                # start screen. The start screen draws its
-                # starfield of moving dots directly on the main
-                # display surface (no separate alpha surface as
-                # before), so we need a clean black background
-                # every frame to prevent the dots from leaving
-                # white trails. The logo and score panel are
-                # drawn AFTER the clear so they are still visible.
-                self._screen.fill((0, 0, 0))
-                self._display_logo()
                 self._start_screen.show()
-                # The start screen clears the top of the screen on its
-                # first display, so re-draw the score titles and high
-                # score value AFTER the start screen so the high score
-                # is visible above the start screen content.
-                self._display_score_titles()
-                self._display_high_score(self._high_score)
             else:
                 self._game.update()
                 self._display_player_score(self._game.score)
@@ -834,9 +830,12 @@ class Game:
                 The class of the round to start, default Round1.
             lives:
                 Optional number of lives for the player, default 3.
+                One extra life is added at the start and consumed when
+                the paddle materialises, so the player sees the
+                "extra life spent" animation before gameplay begins.
         """
         # Keep track of the score and lives throughout the game.
-        self.lives = lives
+        self.lives = lives + 1
         self.score = 0
 
         # Reference to the main screen.
@@ -889,19 +888,262 @@ class Game:
         # Whether the game is finished.
         self.over = False
 
+        # Whether the game is currently paused. While paused, the
+        # state machine and sprite updates are frozen and a
+        # translucent overlay is drawn on top of the last frame.
+        # The flag is toggled by the ``K_p`` KEYUP handler and by
+        # the gamepad's menu / view button (polled in
+        # :meth:`update`).
+        self.paused = False
+        # Whether the game was paused on the previous frame.
+        # Used by :meth:`update` to detect the paused ->
+        # unpaused transition so it can repaint the play area
+        # with the round background and clear the pause overlay
+        # (translucent dim layer + PAUSED text) that was drawn
+        # on top of it - otherwise the overlay would persist as
+        # artifacts (faded text, dimmed bricks) until something
+        # else happened to overwrite that part of the screen.
+        self._was_paused = False
+
+        # Whether the quit-prompt overlay is active.  When True the
+        # pause overlay shows "Quit game?  Y / N" instead of the
+        # usual "PAUSED" caption.  Y ends the game and returns to the
+        # start screen; N or a second ESC press resumes play.
+        self._quit_prompt = False
+
         # The current game state which handles the behaviour for the
         # current stage of the game.
         self.state = GameStartState(self)
 
+        # === Side-area starfield ========================================
+        # The same outward-drifting starfield used on the start screen,
+        # restricted to the left and right side areas outside the play
+        # area.  The stars are drawn directly on the main screen surface
+        # before the play-area background is blitted, so they appear
+        # behind the game field.
+        self._stars = []
+        self._star_center_x = self._screen.get_width() // 2
+        self._star_center_y = self._screen.get_height() // 2
+        self._star_speed_choices = [0.1, 0.15, 0.4, 0.6]
+        self._star_count = 100
+        self._star_flicker_chance = 0.01
+        self._init_stars()
+
     def update(self):
         """Update the state of the running game."""
+        # === Side-area starfield ========================================
+        # Draw the outward-drifting stars in the left and right side
+        # areas BEFORE anything else so they appear behind the play
+        # area background, the pause overlay and all sprites.
+        self._update_and_draw_stars()
+
+        # === Gamepad menu / view button (pause toggle) =================
+        # Polled here rather than wired as a KEYUP handler because
+        # pygame does not dispatch KEYUP-equivalent events for
+        # gamepad buttons - the wrapper tracks button rising edges
+        # internally and reports them once per frame through
+        # :attr:`Gamepad.menu_pressed`. Doing this BEFORE the
+        # ``self.paused`` check means a second press of the menu
+        # button while the overlay is shown immediately resumes
+        # the game, matching the keyboard P-key behaviour.
+        if get_gamepad().menu_pressed:
+            self.paused = not self.paused
+
+        if self.paused:
+            # While paused, freeze the state machine and the
+            # sprite updates.  Restore the clean round background
+            # first so the translucent dim layer is always drawn on
+            # top of the same base image — otherwise each frame
+            # stacks another semi-transparent layer, making the
+            # screen progressively darker and leaving artifacts
+            # when the player resumes.
+            self._screen.blit(self.round.background, self._play_area_rect(),
+                              self._play_area_rect())
+            self._draw_pause_overlay()
+            self._was_paused = True
+            return
+
+        # === Resume from pause =======================================
+        # The pause overlay was drawn directly on the screen on
+        # top of the play area: a translucent dim layer plus the
+        # "PAUSED" caption and the resume hint. None of that is
+        # part of the sprite erase-redraw cycle, so without
+        # intervention the overlay would remain as visual
+        # artifacts (faded text, dimmed bricks, ball-trail-like
+        # smudges) until something else happened to overwrite
+        # those pixels. Detect the paused -> unpaused transition
+        # via ``self._was_paused`` and repaint the play area
+        # with the clean round background before the regular
+        # update runs. The blit is restricted to the play area
+        # so the header (logo + score titles) drawn by the main
+        # loop above the game is left untouched.
+        if self._was_paused:
+            self._screen.blit(self.round.background, self._play_area_rect(),
+                              self._play_area_rect())
+            self._was_paused = False
+
         # Delegate to the active state. This determines the behaviour
         # for the current stage of the game.
         self.state.update()
 
+        # Paint only the play area of the round background before the
+        # sprites are redrawn. Without this, only the sprite rects
+        # get repainted (via the per-sprite erase in
+        # :meth:`_update_sprites`), so the play area stays black
+        # everywhere a sprite has not just been - most visibly where a
+        # brick was destroyed or a powerup has moved on. The blit is
+        # restricted to the play area (between the side walls and
+        # below the top edge) so the logo and 1UP / HIGH SCORE
+        # header drawn by the main loop above the game is left
+        # untouched.
+        play_area = self._play_area_rect()
+        self._screen.blit(self.round.background, play_area, play_area)
+
         # Re-render the sprites.
         self._update_sprites()
         self._update_lives()
+
+    def _draw_pause_overlay(self):
+        """Draw the in-game pause overlay.
+
+        A semi-transparent dark layer is blitted over the *play
+        area only* (not the header with the logo and score
+        titles), and a centred "PAUSED" caption plus a smaller
+        hint about how to resume is drawn on top. The hint text
+        mentions whichever input devices are actually available
+        (keyboard P, gamepad menu button) so the player is never
+        told to press a button they do not have.
+
+        Limiting the dim to the play area keeps the header
+        untouched by the overlay - the logo and score labels
+        stay fully visible (so the player keeps seeing their
+        score while paused) and, more importantly, the header
+        pixels do not need to be restored on resume.
+        """
+        screen = self._screen
+        screen_w, screen_h = screen.get_size()
+
+        # === Dim layer (play area only) ===============================
+        # The dim covers the play area (from the top edge down to
+        # the bottom of the screen, between the side walls).
+        # The header (the strip at the top of the screen, where
+        # the logo and score titles sit) is deliberately left
+        # untouched, for two reasons:
+        #
+        #   1. it keeps the logo and the 1UP / HIGH SCORE
+        #      labels fully visible while the game is paused,
+        #      so the player can still see their score;
+        #   2. on resume we blit ``self.round.background`` over
+        #      the play area to clear the dim and the PAUSED
+        #      text, and that blit does not cover the header
+        #      anyway. Leaving the dim out of the header in the
+        #      first place avoids having to remember to restore
+        #      it as a separate step.
+        play_area = pygame.Rect(
+            LAYOUT.offset_x, self.round.top_offset,
+            screen_w - 2 * LAYOUT.offset_x,
+            screen_h - self.round.top_offset)
+        dim = pygame.Surface(play_area.size, pygame.SRCALPHA)
+        dim.fill((0, 0, 0, 160))
+        screen.blit(dim, play_area.topleft)
+
+        # Big "PAUSED" caption, centred horizontally on the screen
+        # and placed just above the screen midpoint so there is
+        # room for the resume hint below it. The screen midpoint
+        # is well within the play area for every round (the
+        # ``top_offset`` keeps the bricks below the header), so
+        # the text is always drawn on top of the dim layer.
+        if self._quit_prompt:
+            ptext.draw('QUIT GAME?',
+                       center=(screen_w // 2, screen_h // 2 - s(40)),
+                       fontname=MAIN_FONT,
+                       fontsize=s(96),
+                       color=(255, 255, 255),
+                       shadow=(1.0, 1.0),
+                       scolor='grey')
+            hint = 'Y = quit    N / ESC = resume'
+        else:
+            ptext.draw('PAUSED',
+                       center=(screen_w // 2, screen_h // 2 - s(40)),
+                       fontname=MAIN_FONT,
+                       fontsize=s(96),
+                       color=(255, 255, 255),
+                       shadow=(1.0, 1.0),
+                       scolor='grey')
+            if get_gamepad().connected:
+                hint = 'press P or the menu button to resume'
+            else:
+                hint = 'press P to resume'
+        ptext.draw(hint, center=(screen_w // 2, screen_h // 2 + s(50)),
+                   fontname=ALT_FONT,
+                   fontsize=s(24),
+                   color=(200, 200, 200))
+
+    def _init_stars(self):
+        """Populate the side-area starfield with initial stars."""
+        screen_w, screen_h = self._screen.get_size()
+        self._star_center_x = screen_w // 2
+        self._star_center_y = screen_h // 2
+        for _ in range(self._star_count):
+            star = [0, 0, 0, 0, 0, True]
+            self._reset_star(star)
+            self._stars.append(star)
+
+    def _reset_star(self, star):
+        """Re-seed a star with a fresh random position and direction,
+        confined to the left or right side area outside the play field."""
+        screen_w, screen_h = self._screen.get_size()
+        left_edge = self.round.edges.left.rect.right
+        right_edge = self.round.edges.right.rect.left
+        side_w = left_edge  # width of each side strip
+
+        # Decide which side: 0 = left, 1 = right
+        side = random.randint(0, 1)
+        if side == 0:
+            star[0] = random.uniform(0, side_w)
+        else:
+            star[0] = random.uniform(right_edge, screen_w)
+        star[1] = random.uniform(0, screen_h)
+
+        dx = star[0] - self._star_center_x
+        dy = star[1] - self._star_center_y
+        dist = math.hypot(dx, dy)
+        if dist == 0:
+            star[2], star[3] = 1.0, 0.0
+        else:
+            star[2], star[3] = dx / dist, dy / dist
+        star[4] = random.choice(self._star_speed_choices)
+        star[5] = True
+
+    def _update_and_draw_stars(self):
+        """Advance every side-area star and draw it on the screen.
+
+        Stars that drift into the play area are simply not drawn
+        (they will be respawned once they leave the screen bounds).
+        """
+        screen_w, screen_h = self._screen.get_size()
+        left_edge = self.round.edges.left.rect.right
+        right_edge = self.round.edges.right.rect.left
+
+        for star in self._stars:
+            star[0] += star[2] * star[4]
+            star[1] += star[3] * star[4]
+
+            if random.random() < self._star_flicker_chance:
+                star[5] = not star[5]
+
+            if (star[0] < -2 or star[0] > screen_w + 2 or
+                    star[1] < -2 or star[1] > screen_h + 2):
+                self._reset_star(star)
+                continue
+
+            # Only draw if the star is in a side area (outside the
+            # play-area walls) so it doesn't overlap the game field.
+            in_left = star[0] < left_edge
+            in_right = star[0] > right_edge
+            if star[5] and (in_left or in_right):
+                pygame.draw.circle(self._screen, (255, 255, 255),
+                                   (int(star[0]), int(star[1])), 1)
 
     def _update_sprites(self):
         """Erase the sprites, update their state, and then redraw them
@@ -917,13 +1159,30 @@ class Game:
             if sprite.visible:
                 self._screen.blit(sprite.image, sprite.rect)
 
+    def _play_area_rect(self):
+        """Return the screen-space rectangle of the play area.
+
+        The play area is the region bounded by the side walls and
+        below the top edge - i.e. the rectangle the round's
+        background is filled with. Used by the per-frame background
+        blit in :meth:`update` and by the pause overlay in
+        :meth:`_draw_pause_overlay` to make sure neither of those
+        operations touches the header (logo + 1UP / HIGH SCORE)
+        drawn by the main loop above the game.
+        """
+        edges = self.round.edges
+        return pygame.Rect(
+            edges.left.rect.right,
+            edges.top.rect.bottom,
+            edges.right.rect.left - edges.left.rect.right,
+            self._screen.get_height() - edges.top.rect.bottom)
+
     def _update_lives(self):
         """Update the number of remaining lives displayed on the screen."""
         # Erase the existing lives.
         for rect in self._life_rects:
             self._screen.blit(self.round.background, rect, rect)
         self._life_rects.clear()
-
         # Display the remaining lives. The padding between/around the
         # life icons is scaled from the reference resolution so the
         # icons look correctly spaced at any display size.
@@ -1083,26 +1342,70 @@ class Game:
 
         def move_left(event):
             nonlocal keys_down
-            if event.key == pygame.K_LEFT:
+            if event.key in (pygame.K_LEFT, pygame.K_a):
                 self.paddle.move_left()
                 keys_down += 1
         self.handler_move_left = move_left
 
         def move_right(event):
             nonlocal keys_down
-            if event.key == pygame.K_RIGHT:
+            if event.key in (pygame.K_RIGHT, pygame.K_d):
                 self.paddle.move_right()
                 keys_down += 1
         self.handler_move_right = move_right
 
         def stop(event):
             nonlocal keys_down
-            if event.key == pygame.K_LEFT or event.key == pygame.K_RIGHT:
+            if event.key in (pygame.K_LEFT, pygame.K_RIGHT,
+                              pygame.K_a, pygame.K_d):
                 if keys_down > 0:
                     keys_down -= 1
                 if keys_down == 0:
                     self.paddle.stop()
         self.handler_stop = stop
+
+        def toggle_pause(event):
+            """Toggle the in-game pause overlay on P key release.
+
+            ``K_p`` (and the gamepad's menu / view button, polled
+            separately each frame in :meth:`Game.update`) flips
+            :attr:`Game.paused`; the main loop freezes the
+            state-machine and sprite updates while that flag is
+            set, and the pause overlay is drawn on top of the
+            frozen frame.
+            """
+            if event.key == pygame.K_p:
+                self.paused = not self.paused
+                self._quit_prompt = False
+        self.handler_toggle_pause = toggle_pause
+
+        def handle_esc(event):
+            """ESC opens the quit-prompt overlay; a second ESC dismisses it."""
+            if event.key == pygame.K_ESCAPE:
+                if not self._quit_prompt:
+                    self._quit_prompt = True
+                    self.paused = True
+                else:
+                    self._quit_prompt = False
+                    self.paused = False
+        self.handler_esc = handle_esc
+
+        def handle_quit_response(event):
+            """Y / N responses while the quit-prompt overlay is shown."""
+            if not self._quit_prompt:
+                return
+            if event.key == pygame.K_y:
+                self._quit_prompt = False
+                self.paused = False
+                for b in self.balls:
+                    b.speed = 0
+                    b.visible = False
+                self.paddle.visible = False
+                self.over = True
+            elif event.key == pygame.K_n:
+                self._quit_prompt = False
+                self.paused = False
+        self.handler_quit_response = handle_quit_response
 
     @property
     def ball(self):
@@ -1167,6 +1470,16 @@ class GameStartState(BaseState):
                                   self.game.handler_move_left,
                                   self.game.handler_move_right)
         receiver.register_handler(pygame.KEYUP, self.game.handler_stop)
+        # Register the in-game pause toggle (P key). The gamepad's
+        # menu / view button is polled in :meth:`Game.update`
+        # rather than wired as an event handler, because pygame
+        # does not dispatch KEYUP events for gamepad buttons.
+        receiver.register_handler(pygame.KEYUP,
+                                  self.game.handler_toggle_pause)
+        receiver.register_handler(pygame.KEYUP,
+                                  self.game.handler_esc)
+        receiver.register_handler(pygame.KEYUP,
+                                  self.game.handler_quit_response)
 
     def update(self):
         # TODO: implement the game intro sequence (animation).
@@ -1181,7 +1494,7 @@ class RoundStartState(BaseState):
     round to begin.
     """
 
-    def __init__(self, game):
+    def __init__(self, game, consume_startup_life=True):
         super().__init__(game)
 
         # Set up the sprites for the round.
@@ -1209,6 +1522,30 @@ class RoundStartState(BaseState):
 
         # Keep track of the number of update cycles.
         self._update_count = 0
+
+        # === Manual ball release =========================================
+        # The ball sits on the paddle from frame 200 onwards and is
+        # normally released automatically at frame 340. To match the
+        # behaviour of the catch powerup (and what players expect
+        # from Arkanoid), we also let the player release the ball
+        # manually by pressing Space (keyboard) or A / Cross
+        # (gamepad). The release handlers are registered here and
+        # torn down in :meth:`_release_ball` once the ball is
+        # released - whether by the player or by the automatic
+        # timeout - so they don't leak across state transitions.
+        self._released = False
+        # The ball is not yet on the paddle (it is anchored to a
+        # fixed off-paddle position), so the manual release is
+        # disabled until the ball is anchored to the paddle in
+        # :meth:`update`. Pressing Space before then is a no-op.
+        self._can_release = False
+        # Whether the extra startup life should be consumed when the
+        # paddle materialises.  True for the initial round start,
+        # False for RoundRestartState and subsequent rounds.
+        self._consume_startup_life = consume_startup_life
+        receiver.register_handler(pygame.KEYUP, self._on_release_keyup)
+        self._gamepad_listener = _RoundStartGamepadListener(self)
+        self.game.sprites.append(self._gamepad_listener)
 
     def _setup_sprites(self):
         """Make all the sprites available for rendering."""
@@ -1284,7 +1621,15 @@ class RoundStartState(BaseState):
                 self._paddle_reset = True
             self.game.paddle.visible = True
             self.game.ball.visible = True
+            # The ball is now sitting on the visible paddle, so the
+            # player can release it manually with Space / A.
+            self._can_release = True
         if self._update_count == 201:
+            # Consume the extra startup life — the player saw one
+            # more life icon on screen before this point; now the
+            # paddle materialises and that life is "spent".
+            if self._consume_startup_life:
+                self.game.lives -= 1
             # Animate the paddle materializing onto the screen.
             self.game.paddle.transition(MaterializeState(self.game.paddle))
             # Animate the bricks
@@ -1295,16 +1640,86 @@ class RoundStartState(BaseState):
             self._screen.blit(self.game.round.background, caption[1])
             self._screen.blit(self.game.round.background, ready[1])
         if self._update_count > 340:
-            # Release the anchor.
-            self.game.ball.release(BALL_START_ANGLE_RAD)
-            # Normal gameplay begins.
-            self.game.state = RoundPlayState(self.game)
+            # Release the anchor. Uses the same code path as the
+            # manual release so the handlers are torn down either
+            # way.
+            self._release_ball()
 
         self._update_count += 1
 
         # Don't let the paddle move when it's not displayed.
         if not self.game.paddle.visible:
             self.game.paddle.stop()
+
+    def _on_release_keyup(self, event):
+        """KEYUP handler that releases the ball on Space.
+
+        Only active once the ball is anchored to the paddle (see
+        ``_can_release`` in :meth:`update`).
+        """
+        if event.key == pygame.K_SPACE:
+            self._release_ball()
+
+    def _release_ball(self):
+        """Release the anchored ball and transition to gameplay.
+
+        Idempotent: subsequent calls (e.g. the player pressing
+        Space a second time after the automatic release has
+        already fired) are no-ops. Tearing down the KEYUP handler
+        and the gamepad polling sprite here means the release
+        mechanism never leaks beyond the round-start state,
+        regardless of whether the release was triggered manually
+        or by the automatic timeout in :meth:`update`.
+        """
+        if self._released:
+            return
+        if not self._can_release:
+            return
+        self._released = True
+        # Drop the release listeners before we hand control over to
+        # RoundPlayState, so the next state doesn't inherit stale
+        # handlers.
+        receiver.unregister_handler(self._on_release_keyup)
+        if (self._gamepad_listener is not None
+                and self._gamepad_listener in self.game.sprites):
+            self.game.sprites.remove(self._gamepad_listener)
+        self._gamepad_listener = None
+        # Release the ball at the configured start angle and switch
+        # to the live-play state.
+        self.game.ball.release(BALL_START_ANGLE_RAD)
+        self.game.state = RoundPlayState(self.game)
+
+
+class _RoundStartGamepadListener(pygame.sprite.Sprite):
+    """Per-frame polling sprite that releases the ball on the
+    A / Cross gamepad button.
+
+    Mirrors :class:`_GamepadCatchReleaseListener` from the catch
+    powerup: pygame does not generate KEYUP events for gamepad
+    buttons, so the round-start state adds one of these listeners
+    to ``self.game.sprites`` on entry and removes it in
+    :meth:`RoundStartState._release_ball`. The listener's
+    ``update()`` is invoked by ``Game._update_sprites()`` every
+    frame while the round-start state is active, giving us a
+    reliable per-frame poll of the A button.
+    """
+
+    def __init__(self, state):
+        super().__init__()
+        self._state = state
+        # 1x1 placeholder surface. The sprite is never visible
+        # so this is purely cosmetic.
+        self.image = pygame.Surface((1, 1))
+        self.image.set_alpha(0)
+        self.rect = pygame.Rect(0, 0, 1, 1)
+        self.visible = False
+
+    def update(self):
+        # Local import to avoid a circular import between the
+        # gamepad wrapper and the round-start state.
+        from arkanoid.game import get_gamepad
+        if get_gamepad().fire_pressed:
+            self._state._release_ball()
 
 
 class RoundPlayState(BaseState):
@@ -1356,7 +1771,7 @@ class RoundRestartState(RoundStartState):
     """
 
     def __init__(self, game):
-        super().__init__(game)
+        super().__init__(game, consume_startup_life=False)
 
         # The new number of lives since restarting.
         self._lives = game.lives - 1
@@ -1431,7 +1846,8 @@ class RoundEndState(BaseState):
             self.game.balls = self.game.balls[:1]
             if self.game.round.next_round is not None:
                 self.game.round = self.game.round.next_round(TOP_OFFSET)
-                self.game.state = RoundStartState(self.game)
+                self.game.state = RoundStartState(
+                    self.game, consume_startup_life=False)
             else:
                 # TODO: special behaviour when user completes whole game.
                 self.game.state = GameEndState(self.game)
@@ -1458,7 +1874,10 @@ class GameEndState(BaseState):
         # Unregister the event handlers.
         receiver.unregister_handler(self.game.handler_move_left,
                                     self.game.handler_move_right,
-                                    self.game.handler_stop)
+                                    self.game.handler_stop,
+                                    self.game.handler_toggle_pause,
+                                    self.game.handler_esc,
+                                    self.game.handler_quit_response)
 
     def update(self):
         pass

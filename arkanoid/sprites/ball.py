@@ -360,7 +360,7 @@ class Ball(pygame.sprite.Sprite):
             rects:
                 The sequence of rectagles the ball has collided with.
         Returns:
-            A tuple of 4 booleans corresponding to the top left, rop right,
+            A tuple of 4 booleans corresponding to the top left, top right,
             bottom left and bottom right corners of the ball. True for any
             of these indicates collision.
         """

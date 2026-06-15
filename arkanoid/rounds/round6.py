@@ -137,10 +137,7 @@ class Round6(BaseRound):
         # enemy in the existing per-level rotation (see rounds 1-5)
         # and continues the "round 6 -> enemy from round 1, round 7
         # -> enemy from round 2, ..." pattern requested for the
-        # later rounds. We avoid ``EnemyType.sphere`` because no
-        # ``enemy_sphere_*.png`` assets ship with the game, which
-        # would leave the enemy's animation iterator empty and
-        # raise ``StopIteration`` on the first ``update()`` call.
+        # later rounds.
         self.enemy_type = EnemyType.cone
         self.num_enemies = 3
 

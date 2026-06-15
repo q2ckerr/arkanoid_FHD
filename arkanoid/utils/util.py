@@ -56,7 +56,7 @@ def load_png(filename):
         raise FileNotFoundError('File not found: {}'.format(fullpath))
 
     image = pygame.image.load(fullpath)
-    if image.get_alpha is None:
+    if image.get_alpha() is None:
         image = image.convert()
     else:
         image = image.convert_alpha()

@@ -32,6 +32,16 @@ See [Controls](#controls) below for the full button mapping.
 
 Three new rounds have been added on top of the upstream four (and the existing round 5). 
 
+### Pause mode
+
+The game can be paused at any time during a round by pressing **P** on the keyboard or the **Back / View / Select** button (button 6) on the gamepad. While paused, the state machine, sprite updates and animations are all frozen and a translucent overlay with a centred "PAUSED" caption is drawn over the last rendered frame, so the player can see exactly where the action was interrupted. Pressing P or the menu button again resumes play. The keyboard and the gamepad can be used interchangeably - the resume hint on the overlay automatically mentions whichever input device is currently connected.
+
+![Pause overlay](./docs/img/pause.png "Pause overlay")
+
+### Alternative keyboard layout: A / D
+
+In addition to the arrow keys, the paddle can be controlled with **A** (left) and **D** (right) on the keyboard, matching the layout used by many other arcade / breakout-style games. Arrow keys and A / D can be mixed freely (e.g. press A to move left while still holding the right arrow).
+
 
 ## Start
 
@@ -124,8 +134,9 @@ By default the game opens a `1920×1080` window; change `DISPLAY_SIZE` near the 
 
 ### Keyboard
 
-* **Left / Right arrows** - move the paddle
+* **Left / Right arrows** or **A / D** - move the paddle
 * **Space** - fire the laser (when the laser powerup is active) and release caught balls
+* **P** - toggle the in-game pause overlay
 * **1-8** - on the start screen, jump straight to the matching round
 * **Enter** - start the game from the start screen
 * **Esc** - quit
@@ -138,6 +149,7 @@ Any standard XInput / DirectInput controller works (Xbox 360/One, PS3/PS4, gener
 * **A / Cross** (button 0) - fire the laser (when the laser powerup is active) / accept the highlighted level on the start screen / start the game
 * **B / Circle** (button 1) - release the ball from the paddle at the start of a round (analog of pressing Space when the ball is on the paddle)
 * **Start** (button 7) - start the game (alternative to A on controllers that expose a dedicated Start button)
+* **Back / View / Select** (button 6) - toggle the in-game pause overlay (analog of pressing P on the keyboard)
 
 If no controller is connected the gamepad wrapper reports a centred stick and no button presses, so the keyboard is the only input source and the rest of the game does not need to special-case the "no controller" case.
 
@@ -152,4 +164,4 @@ If no controller is connected the gamepad wrapper reports a centred stick and no
 ## Author
 
 Will Keeling (original);
-Q2ckerr: gamepad support, resolution scaling and levels 6-8 added in this fork.
+Q2ckerr: gamepad support, resolution scaling, levels 6-8, pause mode and A/D keyboard controls added in this fork.

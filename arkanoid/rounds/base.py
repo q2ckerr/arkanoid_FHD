@@ -40,8 +40,11 @@ class BaseRound:
         # The background for this round.
         self.background = self._create_background()
 
-        # Background (plus edges) are blitted to the screen.
-        self.screen.blit(self.background, (0, top_offset))
+        # NOTE: the background is NOT blitted to the screen here.
+        # The main loop clears the screen to black every frame and
+        # the Game class blits the background (play-area only) and
+        # the side-area starfield each frame, so a one-shot blit at
+        # init time would be immediately overwritten anyway.
 
         # Create the bricks that the ball can collide with, positioning
         # them on the screen.
@@ -144,17 +147,31 @@ class BaseRound:
     def _create_background(self):
         """Create the background surface for the round.
 
-        This method provides a default implementation that simply creates a
-        solid colour for the background, delegating to an abstract hook method
-        for the colour itself. Subclasses may ovrerride this if they wish to
-        provide a more elaborate background (e.g. textured) for a round.
+        The surface is screen-sized but only the play area (the
+        region between the side walls and below the top edge) is
+        filled with the round colour — the rest stays black so the
+        side-area starfield drawn by :class:`Game` shows through.
+
+        Subclasses may override this if they wish to provide a
+        more elaborate background (e.g. textured) for a round.
 
         Returns:
             The background surface.
         """
+        from arkanoid.game import LAYOUT
+
         background = pygame.Surface(self.screen.get_size())
         background = background.convert()
-        background.fill(self._get_background_colour())
+        background.fill((0, 0, 0))
+
+        # Fill only the play area bounded by the side walls and top edge.
+        left = self.edges.left.rect.right
+        right = self.edges.right.rect.left
+        top = self.edges.top.rect.bottom
+        play_rect = pygame.Rect(left, top,
+                                right - left,
+                                self.screen.get_height() - top)
+        background.fill(self._get_background_colour(), play_rect)
         return background
 
     def _get_background_colour(self):
