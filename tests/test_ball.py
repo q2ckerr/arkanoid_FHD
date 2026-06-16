@@ -22,6 +22,11 @@ class TestBall(TestCase):
         mock_screen.get_rect.return_value = mock_area
         mock_area.contains.return_value = offscreen
 
+        # Set integer attributes so arithmetic in _check_stuck works.
+        mock_area.bottom = 800
+        mock_area.left = 0
+        mock_area.right = 600
+
         return mock_sprite
 
     @patch('arkanoid.sprites.ball.load_png')

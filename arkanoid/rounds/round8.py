@@ -2,6 +2,7 @@ import pygame
 
 from arkanoid.rounds.base import (BaseRound,
                                   BLUE)
+from arkanoid.rounds.round9 import Round9
 from arkanoid.sprites.brick import (Brick,
                                     BrickColour)
 from arkanoid.sprites.enemy import EnemyType
@@ -144,6 +145,7 @@ class Round8(BaseRound):
         super().__init__(top_offset)
 
         self.name = 'Round 8'
+        self.next_round = Round9
         # Re-use the round 3 enemy type: ``molecule`` is the third
         # enemy in the existing per-level rotation (see rounds 1-5)
         # and continues the "round 6 -> enemy from round 1, round 7
@@ -162,6 +164,10 @@ class Round8(BaseRound):
 
     def _get_background_colour(self):
         return BLUE
+
+    def _create_background(self):
+        from arkanoid.rounds.background import create_chevron_background
+        return create_chevron_background(self.screen, self.edges)
 
     def _create_bricks(self):
         """Create the bricks and position them on the screen.

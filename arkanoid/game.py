@@ -11,7 +11,11 @@ import pygame
 
 from arkanoid.event import receiver
 from arkanoid.rounds.round1 import Round1
+from arkanoid.sound import (play_block_hit, play_enemy_explode,
+                            play_gold_block_hit, play_level_start)
 from arkanoid.sprites.ball import Ball
+from arkanoid.sprites.brick import Brick, BrickColour
+from arkanoid.sprites.edge import SideEdge, TopEdge
 from arkanoid.sprites.enemy import Enemy
 from arkanoid.sprites.paddle import (ExplodingState,
                                      Paddle,
@@ -280,23 +284,23 @@ class Arkanoid:
             # a clean base every frame.
             self._screen.fill((0, 0, 0))
 
-            # Draw the header (logo + score titles) every frame so
-            # it stays visible above both the start screen and the
-            # gameplay area.
+            # Draw the logo every frame (visible in both states).
             self._display_logo()
-            self._display_score_titles()
-            self._display_high_score(self._high_score)
 
             if not self._game:
                 self._start_screen.show()
             else:
-                self._game.update()
+                # Draw score titles and scores only during gameplay.
+                self._display_score_titles()
+                self._display_high_score(self._high_score)
                 self._display_player_score(self._game.score)
+                self._display_level()
+
+                self._game.update()
 
                 if self._game.over:
                     if self._game.score > self._high_score:
                         self._high_score = self._game.score
-                        self._display_high_score(self._high_score)
                         save_high_score(self._high_score)
                     self._game = None
 
@@ -399,6 +403,16 @@ class Arkanoid:
         position = (right_edge - s(150), y)
         self._screen.blit(self._background, position, score_surf.get_rect())
         self._screen.blit(score_surf, position)
+
+    def _display_level(self):
+        """Draw 'Level X' to the left of the logo, using the same font
+        and style as the score panel."""
+        level_text = 'Level {}'.format(self._game.round.name.split()[-1])
+        ptext.draw(level_text,
+                   topleft=(s(20), sy(20)),
+                   fontname=MAIN_FONT,
+                   fontsize=s(24),
+                   color=(230, 0, 0))
 
 
 class StartScreen:
@@ -837,6 +851,8 @@ class Game:
         # Keep track of the score and lives throughout the game.
         self.lives = lives + 1
         self.score = 0
+        # Extra life thresholds: first at 20K, then every 60K.
+        self._next_extra_life = 20000
 
         # Reference to the main screen.
         self._screen = pygame.display.get_surface()
@@ -910,6 +926,14 @@ class Game:
         # usual "PAUSED" caption.  Y ends the game and returns to the
         # start screen; N or a second ESC press resumes play.
         self._quit_prompt = False
+
+        # Pre-created shadow surfaces (lazily initialized)
+        self._brick_shadow = None
+        self._ball_shadows = {}
+        self._enemy_shadows = {}
+        self._left_wall_shadow = None
+        self._right_wall_shadow = None
+        self._top_wall_shadow = None
 
         # The current game state which handles the behaviour for the
         # current stage of the game.
@@ -1153,11 +1177,126 @@ class Game:
         for sprite in self.sprites:
             self._screen.blit(self.round.background, sprite.rect, sprite.rect)
 
-        # Update and redraw, if visible.
+        # Update all sprites first so positions are current.
         for sprite in self.sprites:
             sprite.update()
+
+        # Redraw wall shadows (erased sprites may have removed parts of them).
+        self._draw_wall_shadows()
+
+        # Draw gradient shadows for bricks, ball and enemies.
+        for sprite in self.sprites:
+            if sprite.visible:
+                if isinstance(sprite, Brick):
+                    if self._brick_shadow is None:
+                        bw, bh = sprite.rect.width, sprite.rect.height
+                        sw = bw + bw // 2
+                        sh = bh + bh
+                        self._brick_shadow = pygame.Surface(
+                            (sw, sh), pygame.SRCALPHA)
+                        for py in range(sh):
+                            ay = int(255 * (1 - py / sh))
+                            for px in range(sw):
+                                ax = int(255 * (1 - px / sw))
+                                a = ax * ay // 255
+                                if a > 0:
+                                    pygame.draw.line(
+                                        self._brick_shadow,
+                                        (0, 0, 0, a), (px, py), (px, py))
+                    self._screen.blit(self._brick_shadow,
+                                      (sprite.rect.x, sprite.rect.y))
+                elif isinstance(sprite, Ball):
+                    shadow_key = id(sprite.image)
+                    if shadow_key not in self._ball_shadows:
+                        self._ball_shadows[shadow_key] = \
+                            self._make_sprite_shadow(sprite.image)
+                    self._screen.blit(self._ball_shadows[shadow_key],
+                                      (sprite.rect.x, sprite.rect.y))
+                elif isinstance(sprite, Enemy):
+                    if sprite.image is not None:
+                        shadow_key = id(sprite.image)
+                        if shadow_key not in self._enemy_shadows:
+                            self._enemy_shadows[shadow_key] = \
+                                self._make_sprite_shadow(sprite.image)
+                        self._screen.blit(self._enemy_shadows[shadow_key],
+                                          (sprite.rect.x, sprite.rect.y))
+
+        # Draw sprites on top of shadows.
+        for sprite in self.sprites:
             if sprite.visible:
                 self._screen.blit(sprite.image, sprite.rect)
+
+    def _make_sprite_shadow(self, image):
+        """Create a gradient shadow surface from a sprite image.
+
+        The shadow preserves the alpha mask of the source image and
+        applies a 2D linear gradient (dark at top-left, transparent
+        at bottom-right).
+        """
+        w, h = image.get_size()
+        img_data = pygame.image.tostring(image.convert_alpha(), 'RGBA')
+        shadow_data = bytearray(w * h * 4)
+        for py in range(h):
+            row_off = py * w * 4
+            for px in range(w):
+                idx = row_off + px * 4
+                alpha = img_data[idx + 3]
+                if alpha > 0:
+                    ax = int(255 * (1 - px / w))
+                    ay = int(255 * (1 - py / h))
+                    a = alpha * ax * ay // (255 * 255)
+                    shadow_data[idx] = 0
+                    shadow_data[idx + 1] = 0
+                    shadow_data[idx + 2] = 0
+                    shadow_data[idx + 3] = a
+        return pygame.image.fromstring(bytes(shadow_data), (w, h), 'RGBA')
+
+    def _draw_wall_shadows(self):
+        """Draw shadows cast by the walls into the play area."""
+        edges = self.round.edges
+        play_area = self._play_area_rect()
+
+        # Left wall shadow - gradient fading from dark near wall to transparent
+        if self._left_wall_shadow is None:
+            shadow_w = s(20)
+            shadow_h = play_area.height
+            self._left_wall_shadow = pygame.Surface(
+                (shadow_w, shadow_h), pygame.SRCALPHA)
+            for i in range(shadow_w):
+                alpha = int(100 * (1 - i / shadow_w))
+                pygame.draw.line(self._left_wall_shadow,
+                                 (0, 0, 0, alpha),
+                                 (i, 0), (i, shadow_h))
+        self._screen.blit(self._left_wall_shadow,
+                          (edges.left.rect.right, play_area.top))
+
+        # Right wall shadow - gradient fading from dark near wall to transparent
+        if self._right_wall_shadow is None:
+            shadow_w = s(20)
+            shadow_h = play_area.height
+            self._right_wall_shadow = pygame.Surface(
+                (shadow_w, shadow_h), pygame.SRCALPHA)
+            for i in range(shadow_w):
+                alpha = int(100 * (i / shadow_w))
+                pygame.draw.line(self._right_wall_shadow,
+                                 (0, 0, 0, alpha),
+                                 (i, 0), (i, shadow_h))
+        self._screen.blit(self._right_wall_shadow,
+                          (edges.right.rect.left - s(20), play_area.top))
+
+        # Top wall shadow - gradient fading from dark near wall to transparent
+        if self._top_wall_shadow is None:
+            shadow_w = play_area.width
+            shadow_h = s(40)
+            self._top_wall_shadow = pygame.Surface(
+                (shadow_w, shadow_h), pygame.SRCALPHA)
+            for j in range(shadow_h):
+                alpha = int(100 * (1 - j / shadow_h))
+                pygame.draw.line(self._top_wall_shadow,
+                                 (0, 0, 0, alpha),
+                                 (0, j), (shadow_w, j))
+        self._screen.blit(self._top_wall_shadow,
+                          (play_area.left, edges.top.rect.bottom))
 
     def _play_area_rect(self):
         """Return the screen-space rectangle of the play area.
@@ -1194,6 +1333,17 @@ class Game:
                 self._screen.blit(self._life_img, (left, top)))
             left += self._life_img.get_width() + s(5)
 
+    def _check_extra_life(self):
+        """Grant an extra life when the score crosses a threshold.
+
+        The first extra life is awarded at 20,000 points, then every
+        60,000 points after that (80K, 140K, 200K, ...).
+        """
+        if self.score >= self._next_extra_life:
+            self.lives += 1
+            self._next_extra_life += 60000
+            self._draw_lives()
+
     def on_brick_collide(self, brick, sprite):
         """Called by a sprite when it collides with a brick.
 
@@ -1209,6 +1359,14 @@ class Game:
         # Increment the collision count.
         brick.collision_count += 1
 
+        # Play the appropriate brick-hit sound.
+        if brick.colour == BrickColour.gold or \
+                (brick.colour == BrickColour.silver and
+                 brick.collision_count == 1):
+            play_gold_block_hit()
+        else:
+            play_block_hit()
+
         # Has the brick been destroyed, based on the collision count?
         if brick.visible:
             # Still visible, so animate to indicate strike.
@@ -1218,6 +1376,7 @@ class Game:
             if brick.value:
                 # Add this brick's value to the score.
                 self.score += brick.value
+                self._check_extra_life()
 
             # Tell the round that a brick has gone, so that it can decide
             # whether the round is completed.
@@ -1263,7 +1422,9 @@ class Game:
                 The sprite instance that struck the enemy.
         """
         enemy.explode()
+        play_enemy_explode()
         self.score += 500
+        self._check_extra_life()
         # Temporarily remove the enemy sprites from the balls to prevent
         # the balls from colliding with the explosion. The enemy sprites
         # are re-added to the balls when they are re-released.
@@ -1604,6 +1765,8 @@ class RoundStartState(BaseState):
                                  fontname=MAIN_FONT,
                                  fontsize=s(24),
                                  color=(255, 255, 255))
+            if self._update_count == 101:
+                play_level_start()
         if self._update_count > 200:
             # Display the "Ready" message.
             ready = ptext.draw('ready',
@@ -1815,9 +1978,19 @@ class RoundRestartState(RoundStartState):
 
 
 class RoundEndState(BaseState):
-    """This state handles the behaviour when the round ends (is completed
-    successfully).
+    """Transition effect between rounds.
+
+    Phases:
+      1. Fade the play area to black.                          (30 frames)
+      2. Show a full-screen starfield with "Level X" text.    (120 frames)
+      3. Fade from black to the new play area.                 (30 frames)
     """
+
+    FADE_OUT_FRAMES = 30
+    ANNOUNCE_FRAMES = 120
+    FADE_IN_FRAMES = 30
+    TOTAL_FRAMES = FADE_OUT_FRAMES + ANNOUNCE_FRAMES + FADE_IN_FRAMES
+
     def __init__(self, game):
         super().__init__(game)
 
@@ -1826,31 +1999,125 @@ class RoundEndState(BaseState):
             self.game.active_powerup.deactivate()
             self.game.active_powerup = None
 
+        # Determine the next round number for the announcement text.
+        self._next_round_name = None
+        if self.game.round.next_round is not None:
+            self._next_round_name = self.game.round.next_round.__name__
+            # e.g. 'Round2' -> 'Level 2'
+            num = ''.join(c for c in self._next_round_name if c.isdigit())
+            self._next_round_name = 'Level {}'.format(num)
+
         self._update_count = 0
 
+        # Cache the screen surface (BaseState does not provide one).
+        self._screen = self.game._screen
+
+        # Full-screen starfield for the transition.
+        self._stars = []
+        self._star_center_x = self._screen.get_width() // 2
+        self._star_center_y = self._screen.get_height() // 2
+        self._star_speed_choices = [0.1, 0.15, 0.4, 0.6]
+        self._star_count = 200
+        self._star_flicker_chance = 0.01
+
+        # Create a black overlay surface for fading.
+        self._fade_surface = pygame.Surface(self._screen.get_size())
+        self._fade_surface.fill((0, 0, 0))
+
+    def _init_stars(self):
+        """Populate the full-screen starfield."""
+        screen_w, screen_h = self._screen.get_size()
+        self._star_center_x = screen_w // 2
+        self._star_center_y = screen_h // 2
+        for _ in range(self._star_count):
+            star = [0, 0, 0, 0, 0, True]
+            self._reset_star(star)
+            self._stars.append(star)
+
+    def _reset_star(self, star):
+        """Re-seed a star with a fresh random position and direction."""
+        screen_w, screen_h = self._screen.get_size()
+        star[0] = random.uniform(0, screen_w)
+        star[1] = random.uniform(0, screen_h)
+        dx = star[0] - self._star_center_x
+        dy = star[1] - self._star_center_y
+        dist = math.hypot(dx, dy)
+        if dist == 0:
+            star[2], star[3] = 1.0, 0.0
+        else:
+            star[2], star[3] = dx / dist, dy / dist
+        star[4] = random.choice(self._star_speed_choices)
+        star[5] = True
+
+    def _update_and_draw_stars(self):
+        """Advance and draw the full-screen starfield."""
+        screen_w, screen_h = self._screen.get_size()
+        for star in self._stars:
+            star[0] += star[2] * star[4]
+            star[1] += star[3] * star[4]
+            if random.random() < self._star_flicker_chance:
+                star[5] = not star[5]
+            if (star[0] < -2 or star[0] > screen_w + 2 or
+                    star[1] < -2 or star[1] > screen_h + 2):
+                self._reset_star(star)
+                continue
+            if star[5]:
+                pygame.draw.circle(self._screen, (255, 255, 255),
+                                   (int(star[0]), int(star[1])), 1)
+
     def update(self):
-        for ball in self.game.balls:
-            ball.speed = 0
-            ball.visible = False
+        count = self._update_count
 
-        self.game.paddle.visible = False
+        # Phase 1: fade out — darken the play area.
+        if count < self.FADE_OUT_FRAMES:
+            # Hide all gameplay sprites during the fade.
+            for ball in self.game.balls:
+                ball.speed = 0
+                ball.visible = False
+            self.game.paddle.visible = False
+            for enemy in self.game.enemies:
+                enemy.visible = False
+            self.game.enemies.clear()
+            self.game.round.edges.top.cancel_open_door()
 
-        for enemy in self.game.enemies:
-            enemy.visible = False
-        self.game.enemies.clear()
-        self.game.round.edges.top.cancel_open_door()
+            alpha = int(255 * count / self.FADE_OUT_FRAMES)
+            self._fade_surface.set_alpha(alpha)
+            self._screen.blit(self._fade_surface, (0, 0))
 
-        # Pause for a short period after stopping the ball(s).
-        if self._update_count > 120:
-            # Move on to the next round, carrying over a single ball.
+        # Phase 2: starfield + announcement text.
+        elif count < self.FADE_OUT_FRAMES + self.ANNOUNCE_FRAMES:
+            self._screen.fill((0, 0, 0))
+            if not self._stars:
+                self._init_stars()
+            self._update_and_draw_stars()
+            if self._next_round_name:
+                ptext.draw(self._next_round_name,
+                           center=(self._screen.get_width() // 2,
+                                   self._screen.get_height() // 2),
+                           fontname=ALT_FONT,
+                           fontsize=s(72),
+                           color=(255, 255, 255),
+                           shadow=(2.0, 2.0),
+                           scolor=(80, 80, 80))
+
+        # Phase 3: fade in from black.
+        elif count < self.TOTAL_FRAMES:
+            progress = count - self.FADE_OUT_FRAMES - self.ANNOUNCE_FRAMES
+            alpha = int(255 * (1.0 - progress / self.FADE_IN_FRAMES))
+            self._fade_surface.set_alpha(alpha)
+            self._screen.blit(self._fade_surface, (0, 0))
+
+        # Transition complete — move to the next round.
+        if count >= self.TOTAL_FRAMES:
             self.game.balls = self.game.balls[:1]
             if self.game.round.next_round is not None:
                 self.game.round = self.game.round.next_round(TOP_OFFSET)
                 self.game.state = RoundStartState(
                     self.game, consume_startup_life=False)
             else:
-                # TODO: special behaviour when user completes whole game.
                 self.game.state = GameEndState(self.game)
+
+        self._update_count += 1
 
         self._update_count += 1
 

@@ -40,6 +40,10 @@ class Round5(BaseRound):
     def _get_background_colour(self):
         return BLUE
 
+    def _create_background(self):
+        from arkanoid.rounds.background import create_hex_background
+        return create_hex_background(self.screen, self.edges)
+
     def _create_bricks(self):
         """Create the bricks and position them on the screen.
 

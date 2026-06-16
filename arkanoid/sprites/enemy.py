@@ -287,31 +287,47 @@ class Enemy(pygame.sprite.Sprite):
 
         # Work out the new direction based on what we've collided with.
         if cleft and cright and ctop and cbottom:
-            # When all 4 sides collide, try to send back in direction
-            # from which originated. Should probably freeze instead.
+            # Completely surrounded — bounce back the way we came.
             direction = -direction
         elif cleft and cright and cbottom:
+            # Blocked on both sides and below — escape upward.
             direction = math.pi + HALF_PI
         elif cleft and cright and ctop:
             direction = HALF_PI
         elif cleft and cbottom:
-            direction = 0
+            # Blocked on left and below — escape up or right.
+            direction = random.choice([0, math.pi + HALF_PI])
         elif cright and cbottom:
-            direction = math.pi
+            # Blocked on right and below — escape up or left.
+            direction = random.choice([math.pi, math.pi + HALF_PI])
         elif cbottom:
-            if direction not in (0, math.pi):
-                direction = 0
+            # Blocked below — escape upward or horizontal.
+            direction = random.choice([
+                0, math.pi,
+                math.pi + HALF_PI,
+                math.pi + HALF_PI,
+            ])
+        elif ctop:
+            # Blocked above — escape downward or horizontal.
+            direction = random.choice([0, math.pi, HALF_PI])
+        elif cleft:
+            # Blocked on left — escape right, sometimes up.
+            direction = random.choice([0, math.pi + HALF_PI])
+        elif cright:
+            # Blocked on right — escape left, sometimes up.
+            direction = random.choice([math.pi, math.pi + HALF_PI])
         else:
-            # Any other combination causes a downward direction. This may
-            # include a corner collision - as we don't detect those.
+            # Any other combination causes a downward direction.
             direction = math.pi - HALF_PI
-            if cleft or cright:
-                # Prevent the sprite from getting 'stuck' to walls.
-                if self._update_count % 60 == 0:
-                    if cright:
-                        direction = math.pi
-                    else:
-                        direction = 0
+            if self._update_count % 60 == 0:
+                # Periodically try upward to avoid getting permanently
+                # stuck in a downward-only loop.
+                direction = random.choice([
+                    math.pi - HALF_PI,
+                    math.pi + HALF_PI,
+                    0,
+                    math.pi,
+                ])
 
         return direction
 

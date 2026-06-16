@@ -227,6 +227,15 @@ class Gamepad:
             self._prev_buttons.discard(button_index)
         return False
 
+    def _button_held(self, button_index):
+        """Return True while ``button_index`` is held down."""
+        if self._joystick is None:
+            return False
+        try:
+            return bool(self._joystick.get_button(button_index))
+        except pygame.error:
+            return False
+
     @property
     def fire_pressed(self):
         """Whether the fire button (A/Cross) was just pressed this frame.
@@ -235,6 +244,14 @@ class Gamepad:
         whether to release a bullet.
         """
         return self._button_pressed(FIRE_BUTTON)
+
+    @property
+    def fire_held(self):
+        """Whether the fire button (A/Cross) is currently held down.
+
+        Used by the laser state for continuous hold-to-fire.
+        """
+        return self._button_held(FIRE_BUTTON)
 
     @property
     def start_pressed(self):

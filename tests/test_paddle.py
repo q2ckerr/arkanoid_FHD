@@ -31,6 +31,7 @@ class TestPaddle(TestCase):
         mock_gamepad.connected = False
         mock_gamepad.axis_x = 0.0
         mock_gamepad.fire_pressed = False
+        mock_gamepad.fire_held = False
         mock_gamepad.start_pressed = False
         mock_gamepad.release_pressed = False
         mock_get_gamepad.return_value = mock_gamepad
@@ -299,6 +300,7 @@ class TestLaserState(TestCase):
         mock_gamepad.connected = False
         mock_gamepad.axis_x = 0.0
         mock_gamepad.fire_pressed = False
+        mock_gamepad.fire_held = False
         mock_gamepad.start_pressed = False
         mock_gamepad.release_pressed = False
         mock_get_gamepad.return_value = mock_gamepad
@@ -342,8 +344,6 @@ class TestLaserState(TestCase):
         state.update()
 
         self.assertEqual(state._to_laser, False)
-        mock_receiver.register_handler.assert_called_once_with(pygame.KEYUP,
-                                                               state._fire)
         mock_pulsator.assert_called_once_with(mock_paddle,
                                               'paddle_laser_pulsate')
         mock_pulsator.return_value.update.assert_called_once_with()
@@ -385,7 +385,6 @@ class TestLaserState(TestCase):
         state.update()
 
         self.assertEqual(state._from_laser, False)
-        mock_receiver.unregister_handler.assert_called_once_with(state._fire)
         mock_on_exit.assert_called_once_with()
 
     @patch('arkanoid.sprites.paddle._PaddlePulsator')
@@ -435,13 +434,11 @@ class TestLaserState(TestCase):
         mock_paddle.rect.bottomleft = (60, 120)
         mock_paddle.rect.width = 50
         mock_game = Mock()
-        mock_event = Mock()
-        mock_event.key = pygame.K_SPACE
         mock_bullet1, mock_bullet2 = Mock(), Mock()
         mock_bullet_class.side_effect = mock_bullet1, mock_bullet2
 
         state = LaserState(mock_paddle, mock_game)
-        state._fire(mock_event)
+        state._spawn_bullets()
 
         mock_bullet_class.assert_has_calls(
             [call(mock_game, position=(70, 120)),
@@ -468,12 +465,10 @@ class TestLaserState(TestCase):
         mock_paddle.rect.bottomleft = (60, 120)
         mock_paddle.rect.width = 50
         mock_game = Mock()
-        mock_event = Mock()
-        mock_event.key = pygame.K_SPACE
 
         state = LaserState(mock_paddle, mock_game)
         state._bullets.extend([Mock(), Mock()])
-        state._fire(mock_event)
+        state._spawn_bullets()
 
         self.assertEqual(mock_bullet_class.call_count, 2)
 
@@ -493,21 +488,19 @@ class TestLaserState(TestCase):
         mock_paddle.rect.bottomleft = (60, 120)
         mock_paddle.rect.width = 50
         mock_game = Mock()
-        mock_event = Mock()
-        mock_event.key = pygame.K_SPACE
 
         state = LaserState(mock_paddle, mock_game)
         state._bullets.extend([Mock()] * 3)
-        state._fire(mock_event)
+        state._spawn_bullets()
 
         self.assertEqual(mock_bullet_class.call_count, 0)
 
     @patch('arkanoid.sprites.paddle.LaserBullet')
     @patch('arkanoid.sprites.paddle._PaddlePulsator')
     @patch('arkanoid.sprites.paddle.load_png_sequence')
-    def test_fire_no_space(self, mock_load_png_sequence, mock_pulsator,
+    def test_fire_no_input(self, mock_load_png_sequence, mock_pulsator,
                            mock_bullet_class):
-        """Test that fire does not happen when spacebar not pressed.
+        """Test that fire does not happen when no key/button is pressed.
         """
         img, rect = Mock(), Mock()
         mock_image_sequence = [(img, rect)]
@@ -517,11 +510,12 @@ class TestLaserState(TestCase):
         mock_paddle.rect.bottomleft = (60, 120)
         mock_paddle.rect.width = 50
         mock_game = Mock()
-        mock_event = Mock()
-        mock_event.key = pygame.KEYUP
 
         state = LaserState(mock_paddle, mock_game)
-        state._fire(mock_event)
+
+        with patch('arkanoid.sprites.paddle.pygame') as mock_pg:
+            mock_pg.key.get_pressed.return_value = {}
+            state.update()
 
         self.assertEqual(mock_bullet_class.call_count, 0)
 
@@ -539,6 +533,7 @@ class TestLaserBullet(TestCase):
         mock_gamepad.connected = False
         mock_gamepad.axis_x = 0.0
         mock_gamepad.fire_pressed = False
+        mock_gamepad.fire_held = False
         mock_gamepad.start_pressed = False
         mock_gamepad.release_pressed = False
         mock_get_gamepad.return_value = mock_gamepad

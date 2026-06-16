@@ -158,6 +158,10 @@ class Round7(BaseRound):
     def _get_background_colour(self):
         return RED
 
+    def _create_background(self):
+        from arkanoid.rounds.background import create_rects_background
+        return create_rects_background(self.screen, self.edges)
+
     def _create_bricks(self):
         """Create the bricks and position them on the screen.
 

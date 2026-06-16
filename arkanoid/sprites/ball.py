@@ -273,6 +273,10 @@ class Ball(pygame.sprite.Sprite):
             # Use the default calculation for the angle.
             self.angle = self._calc_new_angle(rects)
 
+        # Prevent the ball from getting permanently stuck between the
+        # paddle and a side wall.
+        self._check_stuck()
+
         LOG.debug('Ball speed: %s', self.speed)
 
     def _normalise_speed(self):
@@ -281,6 +285,43 @@ class Ball(pygame.sprite.Sprite):
             self.speed -= self.normalisation_rate
         else:
             self.speed += self.normalisation_rate
+
+    def _check_stuck(self):
+        """Prevent the ball from getting permanently stuck between the
+        paddle and a side wall.
+
+        When the ball bounces into a narrow gap between the paddle and
+        a wall, it can end up bouncing horizontally forever with no way
+        for the player to intervene.  Detect this situation and angle
+        the ball away from the nearest wall so it returns to open play.
+        """
+        # Only check when the ball is near the bottom of the play area
+        # (close to the paddle).
+        if self.rect.bottom < self._area.bottom - 80:
+            return
+
+        # Check whether the ball is pressed against a side wall.
+        near_left = self.rect.left <= self._area.left + 5
+        near_right = self.rect.right >= self._area.right - 5
+
+        if not near_left and not near_right:
+            return
+
+        # Decompose velocity into horizontal / vertical components.
+        vx = math.cos(self.angle) * self.speed
+        vy = math.sin(self.angle) * self.speed
+
+        # If the vertical component is large enough the ball will
+        # naturally escape the gap – no intervention needed.
+        if abs(vy) > abs(vx) * 0.5:
+            return
+
+        # The ball is moving almost horizontally toward the wall.
+        # Kick it away so it returns to open play.
+        if near_left and vx < 0:
+            self.angle = math.radians(315)   # right-up
+        elif near_right and vx > 0:
+            self.angle = math.radians(225)   # left-up
 
     def _calc_new_angle(self, rects):
         """Calculate the default angle of bounce of the ball, given a

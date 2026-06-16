@@ -28,9 +28,33 @@ The paddle listens to the left analog stick **and** the D-pad with a configurabl
 
 See [Controls](#controls) below for the full button mapping.
 
-### New levels: 6, 7 and 8
+### New levels: 6, 7, 8 and 9
 
-Three new rounds have been added on top of the upstream four (and the existing round 5). 
+Four new rounds have been added on top of the upstream four (and the existing round 5). Round 9 features two symmetric gold clusters at the top and a central rectangular block with pink/orange borders and a green/teal interior.
+
+### Sound effects
+
+The game includes sound effects loaded from `arkanoid/data/sound/`. Sounds play for brick hits (with a distinct tone for gold and first-hit silver bricks), paddle bounces, enemy explosions, laser fire, powerup collection and round transitions. Rapid re-triggers of the same sound stop the previous instance to avoid overlap.
+
+### Shadow rendering
+
+All sprites (bricks, ball, enemies) cast gradient shadows. Wall shadows fade from the left, right and top edges into the play area, adding depth to the scene.
+
+### Shared decorative backgrounds
+
+A new [`arkanoid/rounds/background.py`](arkanoid/rounds/background.py) module provides four reusable background generators (hexagonal honeycomb, overlapping circles, rounded rectangles, chevrons) that are shared across rounds 1–9, cycling every four levels.
+
+### Round transition effect
+
+When all bricks in a round are destroyed, the play area fades to black, a full-screen starfield with a "Level X" announcement appears, and then the new play area fades in.
+
+### Enemy upward movement
+
+Enemies can now move upward (not just sideways and down) when blocked, preventing them from getting permanently stuck in corners or between the paddle and walls.
+
+### Extra lives on score thresholds
+
+Following the original arcade rules, the player earns an extra life at **20,000** points and then every **60,000** points thereafter (80K, 140K, 200K, ...).
 
 ### Pause mode
 
@@ -137,7 +161,7 @@ By default the game opens a `1920×1080` window; change `DISPLAY_SIZE` near the 
 * **Left / Right arrows** or **A / D** - move the paddle
 * **Space** - fire the laser (when the laser powerup is active) and release caught balls
 * **P** - toggle the in-game pause overlay
-* **1-8** - on the start screen, jump straight to the matching round
+* **1-9** - on the start screen, jump straight to the matching round
 * **Enter** - start the game from the start screen
 * **Esc** - quit
 
@@ -164,4 +188,4 @@ If no controller is connected the gamepad wrapper reports a centred stick and no
 ## Author
 
 Will Keeling (original);
-Q2ckerr: gamepad support, resolution scaling, levels 6-8, pause mode and A/D keyboard controls added in this fork.
+Q2ckerr: gamepad support, resolution scaling, levels 6-9, pause mode, A/D keyboard controls, sound effects, shadows, decorative backgrounds, round transitions, enemy AI improvements and extra lives added in this fork.

@@ -5,6 +5,7 @@ import math
 import pygame
 
 from arkanoid.event import receiver
+from arkanoid.sound import play_laser, play_paddle_hit
 from arkanoid.utils.util import (load_png,
                                  load_png_sequence)
 
@@ -218,6 +219,7 @@ class Paddle(pygame.sprite.Sprite):
         """
         for callback in self.ball_collide_callbacks:
             callback(ball)
+        play_paddle_hit()
 
     @property
     def exploding(self):
@@ -517,6 +519,10 @@ class LaserState(PaddleState):
         # Track the number of laser bullets currently in the air.
         self._bullets = []
 
+        # Cooldown between consecutive shots (in frames).
+        self._fire_cooldown = 0
+        self._FIRE_RATE = 8  # frames between shots
+
         # Exit callback.
         self._on_exit = None
 
@@ -524,8 +530,7 @@ class LaserState(PaddleState):
         """Animate the paddle from normal to laser, or from laser to normal.
 
         Once converted to laser, monitor for fire input every frame:
-          * the keyboard's Space key, handled via the KEYUP
-            handler registered in :meth:`_convert_to_laser`;
+          * the keyboard's Space key, polled via :func:`pygame.key.get_pressed`;
           * the gamepad's A / Cross button (button 0), which is
             *polled* each frame here rather than via an event,
             because pygame does not dispatch KEYUP events for
@@ -534,14 +539,14 @@ class LaserState(PaddleState):
         """
         if not self._to_laser and not self._from_laser:
             self._pulsator.update()
-            # === Gamepad fire =========================================
-            # Poll the gamepad for the A / Cross button. ``fire_pressed``
-            # returns True only on the rising edge of the press, so we
-            # won't fire on every frame the button is held - and we
-            # don't need the user to also be pressing a keyboard key
-            # to generate a KEYUP event for the handler to fire from.
+            if self._fire_cooldown > 0:
+                self._fire_cooldown -= 1
+            # === Gamepad fire (hold to fire continuously) ===========
             from arkanoid.game import get_gamepad
-            if get_gamepad().fire_pressed:
+            if get_gamepad().fire_held:
+                self._spawn_bullets()
+            # === Keyboard fire (hold Space to fire continuously) ====
+            if pygame.key.get_pressed()[pygame.K_SPACE]:
                 self._spawn_bullets()
 
         if self._to_laser:
@@ -555,12 +560,6 @@ class LaserState(PaddleState):
         except StopIteration:
             # Conversion finished.
             self._to_laser = False
-            # Start monitoring for spacebar releases for firing
-            # bullets. The gamepad A button is *polled* in
-            # :meth:`update` rather than registered as an event
-            # handler, because pygame does not generate KEYUP
-            # events for gamepad buttons.
-            receiver.register_handler(pygame.KEYUP, self._fire)
 
     def _convert_from_laser(self):
         try:
@@ -595,25 +594,11 @@ class LaserState(PaddleState):
         self._from_laser = True
         self._on_exit = on_exit
         self._laser_anim = iter(reversed(self._image_sequence))
-        # Stop monitoring for spacebar presses now that we're leaving the
-        # state.
-        receiver.unregister_handler(self._fire)
-
-    def _fire(self, event):
-        """Event handler that fires bullets from the paddle when the
-        spacebar is released (KEYUP).
-
-        The gamepad's A / Cross button is *not* handled here - the
-        laser state's :meth:`update` polls the gamepad every frame
-        for the rising edge of that button. This handler exists
-        solely for the keyboard Space key: pygame only fires KEYUP
-        events for keyboard input, not for gamepad button input.
-        """
-        if event.key == pygame.K_SPACE:
-            self._spawn_bullets()
 
     def _spawn_bullets(self):
         """Release a pair of laser bullets from the paddle."""
+        if self._fire_cooldown > 0:
+            return
         self._bullets = [bullet for bullet in self._bullets if
                          bullet.visible]
         # Fire the bullets, only allowing max 4 in the air at once.
@@ -635,6 +620,8 @@ class LaserState(PaddleState):
             # Release them.
             bullet1.release()
             bullet2.release()
+            play_laser()
+            self._fire_cooldown = self._FIRE_RATE
 
 
 class LaserBullet(pygame.sprite.Sprite):
