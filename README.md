@@ -32,6 +32,10 @@ See [Controls](#controls) below for the full button mapping.
 
 Four new rounds have been added on top of the upstream four (and the existing round 5). Round 9 features two symmetric gold clusters at the top and a central rectangular block with pink/orange borders and a green/teal interior.
 
+### New levels: 10–20
+
+Eleven additional rounds (10–20) with layouts taken from the original Arkanoid stages. Each level uses the next enemy type and background in rotation (cone → pyramid → molecule → cube for enemies; hex → circles → rects → chevrons for backgrounds). Silver brick durability now scales with the round number (2 hits for rounds 1–8, +1 every 8 rounds).
+
 ### Sound effects
 
 The game includes sound effects loaded from `arkanoid/data/sound/`. Sounds play for brick hits (with a distinct tone for gold and first-hit silver bricks), paddle bounces, enemy explosions, laser fire, powerup collection and round transitions. Rapid re-triggers of the same sound stop the previous instance to avoid overlap.
@@ -39,6 +43,38 @@ The game includes sound effects loaded from `arkanoid/data/sound/`. Sounds play 
 ### Shadow rendering
 
 All sprites (bricks, ball, enemies) cast gradient shadows. Wall shadows fade from the left, right and top edges into the play area, adding depth to the scene.
+
+### Intro music
+
+The start screen plays a looping background music track (`intro.mp3`). The music starts on game launch and stops when the first round begins. It resumes when the player returns to the start screen after a game ends.
+
+### Gold brick timeout
+
+If no destructible brick is hit for 3 minutes of active play (pauses excluded), all gold bricks transform into normal yellow bricks so the level remains completable.
+
+### Gold brick animation
+
+Gold bricks play a diagonal shine animation when hit by the ball, giving visual feedback even though they are indestructible.
+
+### Prologue typewriter text
+
+The start screen displays a story prologue with a typewriter effect, revealing one character every 2 frames.
+
+### Quit confirmation
+
+Pressing **Esc** or **Alt+F4** opens a "Quit game? Y / N" confirmation overlay instead of exiting immediately. Only **Esc** can dismiss the overlay; **Y** quits and **N** resumes.
+
+### Paddle bounce angle
+
+The ball bounce angle off the paddle is continuous and depends on where the ball strikes. The centre 60% sends the ball straight up; the outer 20% on each side produces the maximum deflection (±50°).
+
+### Paddle and ball speed
+
+Paddle speed increased to 12 px/frame. Maximum ball speed capped at 12 px/frame (matching the paddle speed).
+
+### Extra life display
+
+When the player has more than 4 extra lives, a single paddle icon with an "xN" label is shown instead of individual icons, saving screen space.
 
 ### Shared decorative backgrounds
 
@@ -188,4 +224,6 @@ If no controller is connected the gamepad wrapper reports a centred stick and no
 ## Author
 
 Will Keeling (original);
-Q2ckerr: gamepad support, resolution scaling, levels 6-9, pause mode, A/D keyboard controls, sound effects, shadows, decorative backgrounds, round transitions, enemy AI improvements and extra lives added in this fork.
+Q2ckerr: gamepad support, resolution scaling, levels 6-20, pause mode, A/D keyboard controls, sound effects, shadows, decorative backgrounds, round transitions, enemy AI improvements, extra lives, intro music, gold brick timeout, typewriter prologue, quit confirmation, paddle bounce rework, speed adjustments and extra life display added in this fork.
+
+Last updated: 2026-06-18

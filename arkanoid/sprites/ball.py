@@ -247,18 +247,34 @@ class Ball(pygame.sprite.Sprite):
         rects, bounce_strategy = [], None
 
         for sprite in sprites:
-            rects.append(sprite.rect)
-            if not bounce_strategy:
-                bounce_strategy = self._collision_data[sprite][0]
+            # Read all collision data BEFORE the callback — the callback
+            # may remove this sprite from _collision_data (e.g. enemy
+            # destruction calls remove_collidable_sprite).
+            data = self._collision_data[sprite]
+
+            # Check visibility BEFORE the callback — the callback may
+            # destroy the brick (e.g. 1-hit bricks become invisible),
+            # but we still need to bounce off it.
+            was_visible = sprite.visible
 
             if self.speed < self._top_speed:
-                # Adjust the speed based on what we collided with.
-                self.speed += self._collision_data[sprite][1]
+                self.speed += data[1]
 
-            on_collide = self._collision_data[sprite][2]
+            on_collide = data[2]
             if on_collide:
-                # Invoke a collision action if we have one.
                 on_collide(sprite, self)
+
+            if not bounce_strategy:
+                bounce_strategy = data[0]
+
+            if was_visible:
+                rects.append(sprite.rect)
+
+        # Only recalculate the angle if at least one surviving sprite was
+        # found.  If every colliding sprite was destroyed by its callback,
+        # the ball already bounced off the first one and the angle is fine.
+        if not rects:
+            return
 
         if len(rects) == 1:
             # Collision with a single object.

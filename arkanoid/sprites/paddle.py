@@ -231,6 +231,11 @@ class Paddle(pygame.sprite.Sprite):
         the angle that the ball bounces off the paddle. The angle
         of bounce is dependent upon where the ball strikes the paddle.
 
+        The centre of the paddle sends the ball straight up. The further
+        from the centre, the stronger the horizontal deflection. The
+        maximum side angle is reached at 1/5 of the paddle width from
+        each edge.
+
         Note: this function is not tied to the Paddle class but we house it
         here as it seems a reasonable place to keep it.
 
@@ -243,33 +248,20 @@ class Paddle(pygame.sprite.Sprite):
         Returns:
             The angle of bounce in radians.
         """
-        # Logically break the paddle into 6 segments.
-        # Each segment triggers a different angle of bounce.
-        segment_size = paddle_rect.width // 6
-        segments = []
+        # Ball offset from paddle centre, normalised to -1..1.
+        paddle_cx = paddle_rect.centerx
+        half_w = paddle_rect.width / 2.0
+        offset = (ball_rect.centerx - paddle_cx) / half_w
 
-        for i in range(6):
-            # Create rectangles for all segments bar the last.
-            left = paddle_rect.left + segment_size * i
-            if i < 5:
-                # These segments are a fixed size.
-                segment = pygame.Rect(left, paddle_rect.top, segment_size,
-                                      paddle_rect.height)
-            else:
-                # The last segment makes up what is left of the paddle width.
-                segment = pygame.Rect(left, paddle_rect.top,
-                                      paddle_rect.width - (segment_size * 5),
-                                      paddle_rect.height)
-            segments.append(segment)
+        # The outer 20 % on each side produces the maximum deflection.
+        # Map |offset| from [0 .. 0.8] → [0 .. 1], clamped.
+        t = max(0.0, min(1.0, (abs(offset) - 0.2) / 0.6)) if abs(offset) > 0.2 else 0.0
 
-        # The bounce angles corresponding to each of the 8 segments.
-        angles = 220, 245, 260, 280, 295, 320
+        # Straight up is 270°. Maximum deflection is ±50°.
+        MAX_DEFLECT = 50  # degrees
+        angle_deg = 270 + (MAX_DEFLECT * t * (1 if offset >= 0 else -1))
 
-        # Discover which segment the ball collided with. Just use the first.
-        index = ball_rect.collidelist(segments)
-
-        # Look up the angle and convert it to radians, before returning.
-        return math.radians(angles[index])
+        return math.radians(angle_deg)
 
 
 class PaddleState:

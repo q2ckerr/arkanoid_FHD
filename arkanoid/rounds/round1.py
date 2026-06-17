@@ -35,7 +35,9 @@ class Round1(BaseRound):
 
     def can_release_enemies(self):
         """Release the enemies when 25% of the bricks have been destroyed."""
-        return self._bricks_destroyed >= len(self.bricks) // 4
+        total = len(self.bricks)
+        remaining = sum(1 for b in self.bricks if b.visible)
+        return (total - remaining) >= total // 4
 
     def _get_background_colour(self):
         return BLUE

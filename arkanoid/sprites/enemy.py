@@ -182,6 +182,14 @@ class Enemy(pygame.sprite.Sprite):
                 # Calculate a new position based on the current direction.
                 self.rect = self._calc_new_position()
 
+                # Clamp: enemies must not go below the paddle.
+                paddle_top = self._paddle.rect.top
+                if self.rect.bottom > paddle_top:
+                    self.rect.bottom = paddle_top
+                    # Bounce upward if we were heading down.
+                    if math.sin(self._direction) > 0:
+                        self._direction = -self._direction
+
                 if self._area.contains(self.rect):
                     if pygame.sprite.spritecollide(self, [self._paddle],
                                                    False):
@@ -335,21 +343,23 @@ class Enemy(pygame.sprite.Sprite):
         """Calculate the direction of travel when the sprite is moving
         freely (has not collided).
 
-        When moving freely (not colliding) the enemy sprites will gradually
-        move towards the paddle.
+        Returns a random direction with a preference for downward.
 
         Returns:
             The direction in radians.
         """
-        # No collision, so calculate the direction towards the paddle
-        # but with some randomness applied.
-        paddle_x, paddle_y = self._paddle.rect.center
-        direction = math.atan2(paddle_y - self.rect.y,
-                               paddle_x - self.rect.x)
-
-        direction += random.uniform(-RANDOM_RANGE, RANDOM_RANGE)
-
-        return direction
+        # Weighted random: downward directions are more likely.
+        # Angles: 0=right, HALF_PI=down, PI=left, 3PI/2=up
+        candidates = [
+            (HALF_PI, 4),           # down — most likely
+            (0, 1),                 # right
+            (math.pi, 1),          # left
+            (math.pi + HALF_PI, 1),  # up — least likely
+            (HALF_PI - 0.5, 2),    # down-right
+            (HALF_PI + 0.5, 2),    # down-left
+        ]
+        directions, weights = zip(*candidates)
+        return random.choices(directions, weights=weights, k=1)[0]
 
     def explode(self):
         """Trigger an explosion of the enemy sprite."""

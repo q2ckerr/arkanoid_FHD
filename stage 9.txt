@@ -1,0 +1,34 @@
+LEVEL_8_LAYOUT = [
+    # Row 0: 
+    [None, None, 'gold', None, 'gold', None, None, None, 'gold', None,'gold', None, None],
+
+    # Row 1: 
+    [None, None, 'gold', 'green', 'gold', None, None, None, 'gold', 'green','gold', None, None],
+
+    # Row 2: 
+    [None, None, 'gold', 'blue', 'gold', None, None, None, 'gold', 'blue','gold', None, None],
+
+    # Row 3: 
+    [None, None, 'gold', 'gold', 'gold', None, None, None, 'gold', 'gold','gold', None, None],,
+
+    # Row 4: 
+    [None, None, None, None, None, None, None, None, None, None,  None, None, None],
+
+    # Row 5: 
+    [None, None, None, None, 'pink', 'blue', 'blue', 'blue', 'orange', None, None, None, None],
+
+    # Row 6: 
+    [None, None, None, None, 'pink', 'green', 'teal', 'green', 'orange', None, None, None, None],
+
+    # Row 7: 
+    [None, None, None, None, 'pink', 'teal', 'green', 'teal', 'orange', None, None, None, None],
+
+    # Row 8: 
+    [None, None, None, None, 'pink', 'green', 'teal', 'green', 'orange', None, None, None, None],
+
+    # Row 9: 
+    [None, None, None, None, 'pink', 'teal', 'green', 'teal', 'orange', None, None, None, None],
+
+    # Row 10: 
+    [None, None, None, None, 'pink', 'blue', 'blue', 'blue', 'orange', None, None, None, None],
+]

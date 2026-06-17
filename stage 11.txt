@@ -1,0 +1,37 @@
+LEVEL_11_LAYOUT = [
+    # Row 0: 
+    [None, 'silver','silver', 'silver', 'silver', 'silver', 'silver', 'silver','silver', 'silver', 'silver', 'silver', None],
+
+    # Row 1: 
+    [None,'silver', None, None, None, None, None, None, None, None, None, 'silver', None],
+
+    # Row 2: 
+    [None, 'silver', None, 'silver', 'silver', 'silver', 'silver', 'silver', 'silver', 'silver', None, 'silver', None],
+
+    # Row 3: 
+    [None, 'silver', None, 'silver', None, None, None, None, None, 'silver', None, 'silver', None],
+
+    # Row 4: 
+    [None, 'silver', None, 'silver', None, 'silver', 'silver', 'silver', None, 'silver', None, 'silver', None],
+
+    # Row 5: 
+    [None, 'silver', None, 'silver', None, 'silver', None, 'silver', None, 'silver', None, 'silver', None],
+
+    # Row 6: 
+     [None, 'silver', None, 'silver', None, 'silver', 'silver', 'silver', None, 'silver', None, 'silver', None],
+
+    # Row 7: 
+    [None, 'silver', None, 'silver', None, None, None, None, None, 'silver', None, 'silver', None],
+
+    # Row 8: 
+    [None, 'silver', None, 'silver', 'silver', 'silver', 'silver', 'silver', 'silver', 'silver', None, 'silver', None],
+
+    # Row 9: 
+    [None,'silver', None, None, None, None, None, None, None, None, None, 'silver', None],
+    
+    # Row 10: 
+    [None, 'silver','silver', 'silver', 'silver', 'silver', 'silver', 'silver','silver', 'silver', 'silver', 'silver', None],
+
+
+
+   

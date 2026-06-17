@@ -76,23 +76,15 @@ class BaseRound:
         # Reference to the next round, to be overriden by subclasses.
         self.next_round = None
 
-        # Keep track of the number of destroyed bricks.
-        self._bricks_destroyed = 0
-
     @property
     def complete(self):
         """Whether the rounds has been completed (all bricks destroyed).
-        
+
         Returns:
             True if the round has been completed. False otherwise.
         """
-        return self._bricks_destroyed >= len([brick for brick in self.bricks
-                                              if brick.colour !=
-                                              BrickColour.gold])
-
-    def brick_destroyed(self):
-        """Conveys to the round that a brick has been destroyed in the game."""
-        self._bricks_destroyed += 1
+        return not any(brick.visible and brick.colour != BrickColour.gold
+                       for brick in self.bricks)
 
     def can_release_enemies(self):
         """Whether the enemies can be released into the game.

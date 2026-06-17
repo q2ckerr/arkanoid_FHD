@@ -96,7 +96,7 @@ class Brick(pygame.sprite.Sprite):
 
         # The number of collisions before the brick gets destroyed.
         if brick_colour == BrickColour.silver:
-            self._destroy_after = 2
+            self._destroy_after = 2 + (round_no - 1) // 8
         elif brick_colour == BrickColour.gold:
             # Gold bricks are never destroyed.
             self._destroy_after = -1

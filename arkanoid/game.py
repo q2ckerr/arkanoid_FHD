@@ -12,7 +12,8 @@ import pygame
 from arkanoid.event import receiver
 from arkanoid.rounds.round1 import Round1
 from arkanoid.sound import (play_block_hit, play_enemy_explode,
-                            play_gold_block_hit, play_level_start)
+                            play_gold_block_hit, play_level_start,
+                            play_intro, stop_music)
 from arkanoid.sprites.ball import Ball
 from arkanoid.sprites.brick import Brick, BrickColour
 from arkanoid.sprites.edge import SideEdge, TopEdge
@@ -58,7 +59,7 @@ BALL_START_ANGLE_RAD = 5.0  # Value must be no smaller than -3.14
 BALL_BASE_SPEED = 8  # pixels per frame
 # The max speed of the ball, prevents a runaway speed when lots of rapid
 # collisions.
-BALL_TOP_SPEED = 15  # pixels per frame
+BALL_TOP_SPEED = 12  # pixels per frame (must not exceed PADDLE_SPEED)
 # Per-frame rate at which ball is brought back to base speed.
 BALL_SPEED_NORMALISATION_RATE = 0.02
 # Increase in speed caused by colliding with a brick.
@@ -66,7 +67,7 @@ BRICK_SPEED_ADJUST = 0.5
 # Increase in speed caused by colliding with a wall.
 WALL_SPEED_ADJUST = 0.2
 # The speed the paddle moves.
-PADDLE_SPEED = 10
+PADDLE_SPEED = 12
 # The fonts.
 MAIN_FONT = os.path.join(os.path.dirname(__file__), 'data', 'fonts',
                          'generation.ttf')
@@ -240,12 +241,20 @@ class Arkanoid:
         # Reference to a running game, when one is in play.
         self._game = None
 
+        # Start the intro music on the main menu.
+        play_intro()
+
         # Whether we're running.
         self._running = True
 
         # Set up the top level event handlers.
         def quit_handler(event):
-            self._running = False
+            # Alt-F4 / window close: show the in-game quit prompt if a
+            # game is running, otherwise exit immediately.
+            if self._game and not self._game.over:
+                self._game._open_quit_prompt()
+            else:
+                self._running = False
         receiver.register_handler(pygame.QUIT, quit_handler)
 
         # Initialise the scores. The y coordinates place the 1UP
@@ -303,6 +312,8 @@ class Arkanoid:
                         self._high_score = self._game.score
                         save_high_score(self._high_score)
                     self._game = None
+                    play_intro()
+                    self._start_screen.reset_typewriter()
 
             # Display all updates.
             pygame.display.flip()
@@ -328,6 +339,7 @@ class Arkanoid:
         else:
             self._game = Game(round_class=round_cls)
             self._start_screen.hide()
+            stop_music()
 
     def _create_screen(self):
         pygame.display.set_mode(DISPLAY_SIZE)
@@ -488,6 +500,16 @@ class StartScreen:
         # Keep track of display count for animation purposes.
         self._display_count = 0
 
+        # === Typewriter prologue text =======================================
+        self._prologue_text = (
+            'The era and time of this story is unknown.\n'
+            'After the mothership \u00abArkanoid\u00bb was destroyed,\n'
+            'a spacecraft \u00abVaus\u00bb scrambled away from it.\n'
+            'But only to be trapped in space, warped by someone\u2026'
+        )
+        self._prologue_frame = 0
+        self._prologue_frames_per_char = 2
+
         # === Starfield animation ==========================================
         # A simple field of white dots scattered randomly across the
         # whole screen, each drifting slowly outward from the centre.
@@ -587,6 +609,24 @@ class StartScreen:
         grid_center_x = (grid_left + grid_right) // 2
         row_height = s(110)
 
+        # === CENTER: Typewriter prologue text ==============================
+        visible_count = min(
+            len(self._prologue_text),
+            self._prologue_frame // self._prologue_frames_per_char)
+        if visible_count < len(self._prologue_text):
+            self._prologue_frame += 1
+        visible = self._prologue_text[:visible_count]
+        if visible:
+            prologue_left = grid_right + s(20)
+            prologue_right = screen_w - s(40)
+            prologue_center_x = (prologue_left + prologue_right) // 2
+            ptext.draw(visible,
+                       midtop=(prologue_center_x, sy(160)),
+                       fontname=ALT_FONT,
+                       fontsize=s(28),
+                       color=(200, 200, 200),
+                       align='center')
+
         # POWERUPS label, centred horizontally over the 2-column grid
         # and placed just above the grid's top row.
         ptext.draw('POWERUPS', center=(grid_center_x, sy(180)),
@@ -625,62 +665,41 @@ class StartScreen:
                 left = grid_left
                 top += row_height
 
-        # === RIGHT SIDE: Controls (right-aligned to screen edge) =========
+        # === BOTTOM CENTER: Controls =====================================
         if self._display_count % 15 == 0:
             self._text_color_1 = next(self._text_colors_1)
             self._text_color_2 = next(self._text_colors_2)
 
-        # Right edge of the screen with a small uniform margin. The
-        # controls are right-aligned here so they sit clearly on the
-        # right side of the screen, independent of the play area.
-        right_x = screen_w - s(40)
-
         # SPACEBAR (OR A / START) TO START - the main call to action.
-        # The text shows the keyboard shortcut by default and the
-        # gamepad's A / Cross button (and, as a fallback, the
-        # dedicated Start button) as an alternative - so the prompt
-        # reads correctly whether or not a controller is plugged in.
-        # The A button is the primary gamepad option because it is
-        # the universal "primary action" button on every common
-        # controller layout and is the most natural counterpart to
-        # the Space key on a keyboard.
         gamepad = get_gamepad()
         if gamepad.connected:
             start_label = 'SPACEBAR / A TO START'
         else:
             start_label = 'SPACEBAR TO START'
-        ptext.draw(start_label, topright=(right_x, sy(360)),
+        ptext.draw(start_label, midtop=(screen_w // 2, sy(610)),
                    fontname=ALT_FONT,
-                   fontsize=s(40),
+                   fontsize=s(32),
                    color=self._text_color_1,
                    shadow=(1.0, 1.0),
                    scolor="grey")
 
         # OR ENTER LEVEL - secondary action.
-        ptext.draw('OR ENTER LEVEL', topright=(right_x, sy(470)),
+        ptext.draw('OR ENTER LEVEL', midtop=(screen_w // 2, sy(655)),
                    fontname=ALT_FONT,
-                   fontsize=s(28),
+                   fontsize=s(22),
                    color=self._text_color_2)
 
-        # User input (level number) - on the line below OR ENTER LEVEL
-        # so there's room to type a 1-2 digit number without overlapping
-        # the label.
+        # User input (level number)
         self._user_input_pos = ptext.draw(self._user_input,
-                                          topright=(right_x, sy(530)),
+                                          midtop=(screen_w // 2, sy(690)),
                                           fontname=ALT_FONT,
-                                          fontsize=s(32),
+                                          fontsize=s(26),
                                           color=(255, 255, 255))[1]
 
         # === BOTTOM: "Based on..." credit, centred horizontally =========
-        # The previous version used pos=(screen_w//2, sy(700)) with
-        # align='center', but align='center' only centres the LINES
-        # within the rendered text surface - it does not centre the
-        # surface itself relative to the screen. Use
-        # midtop=(screen_w//2, y) so the rendered text is horizontally
-        # centred on the screen with its top edge at sy(700).
         ptext.draw('Based on original Arkanoid game\n'
                    'by Taito Corporation 1986',
-                   midtop=(screen_w // 2, sy(700)),
+                   midtop=(screen_w // 2, sy(740)),
                    fontname=ALT_FONT,
                    fontsize=s(18),
                    color=(128, 128, 128))
@@ -691,6 +710,10 @@ class StartScreen:
         """Hide the start screen and unregister event listeners."""
         receiver.unregister_handler(self._on_keyup)
         self._registered = False
+
+    def reset_typewriter(self):
+        """Reset the prologue typewriter effect for the next display."""
+        self._prologue_frame = 0
 
     def _on_keyup(self, event):
         """Event handler for capturing user input.
@@ -710,14 +733,13 @@ class StartScreen:
             self._user_input += numeric_keys[event.key]
         elif event.key == pygame.K_BACKSPACE:
             self._user_input = ''
-            # Clear the user input area. The clear surface is scaled
-            # from the reference size so it covers the rendered input
-            # text at any resolution.
-            self._screen.blit(pygame.Surface((s(100), s(60))),
-                              self._user_input_pos)
+            clear = pygame.Surface((s(100), s(40)))
+            self._screen.blit(clear, clear.get_rect(
+                midtop=self._user_input_pos))
         elif event.key == pygame.K_RETURN and self._user_input:
-            self._screen.blit(pygame.Surface((s(100), s(60))),
-                              self._user_input_pos)
+            clear = pygame.Surface((s(100), s(40)))
+            self._screen.blit(clear, clear.get_rect(
+                midtop=self._user_input_pos))
             self._on_start(int(self._user_input))
             self._user_input = ''
 
@@ -935,6 +957,11 @@ class Game:
         self._right_wall_shadow = None
         self._top_wall_shadow = None
 
+        # Timeout: if no brick is hit for 3 minutes (10800 frames at 60 fps),
+        # all gold bricks become normal yellow bricks.
+        self._brick_timer = 0
+        self._BRICK_TIMEOUT = 10800
+
         # The current game state which handles the behaviour for the
         # current stage of the game.
         self.state = GameStartState(self)
@@ -1009,6 +1036,14 @@ class Game:
         # Delegate to the active state. This determines the behaviour
         # for the current stage of the game.
         self.state.update()
+
+        # === Brick timeout ================================================
+        # If no brick has been hit for 3 minutes, convert all gold bricks
+        # to normal yellow bricks so the level remains completable.
+        self._brick_timer += 1
+        if self._brick_timer >= self._BRICK_TIMEOUT:
+            self._brick_timer = 0
+            self._convert_gold_to_yellow()
 
         # Paint only the play area of the round background before the
         # sprites are redrawn. Without this, only the sprite rects
@@ -1316,22 +1351,45 @@ class Game:
             edges.right.rect.left - edges.left.rect.right,
             self._screen.get_height() - edges.top.rect.bottom)
 
+    def _convert_gold_to_yellow(self):
+        """Convert all gold bricks to normal yellow bricks."""
+        for brick in self.round.bricks:
+            if brick.colour == BrickColour.gold:
+                brick.colour = BrickColour.yellow
+                brick._destroy_after = 1
+                brick.collision_count = 0
+                brick.value = BrickColour.yellow.value
+                brick.image, _ = load_png('brick_yellow')
+
     def _update_lives(self):
         """Update the number of remaining lives displayed on the screen."""
         # Erase the existing lives.
         for rect in self._life_rects:
             self._screen.blit(self.round.background, rect, rect)
         self._life_rects.clear()
-        # Display the remaining lives. The padding between/around the
-        # life icons is scaled from the reference resolution so the
-        # icons look correctly spaced at any display size.
         left = self.round.edges.left.rect.right
         top = self._screen.get_height() - self._life_img.get_height() - s(5)
+        extra = self.lives - 1
 
-        for life in range(self.lives - 1):
+        if extra > 4:
+            # Show one icon + "xN" label when there are many lives.
             self._life_rects.append(
                 self._screen.blit(self._life_img, (left, top)))
             left += self._life_img.get_width() + s(5)
+            label = 'x{}'.format(extra)
+            lbl_surf = ptext.draw(label, (left, top),
+                                  fontname=MAIN_FONT,
+                                  fontsize=s(20),
+                                  color=(255, 255, 255))[0]
+            self._life_rects.append(
+                pygame.Rect(left, top, lbl_surf.get_width(),
+                            lbl_surf.get_height()))
+            self._screen.blit(lbl_surf, (left, top))
+        else:
+            for _ in range(extra):
+                self._life_rects.append(
+                    self._screen.blit(self._life_img, (left, top)))
+                left += self._life_img.get_width() + s(5)
 
     def _check_extra_life(self):
         """Grant an extra life when the score crosses a threshold.
@@ -1342,7 +1400,7 @@ class Game:
         if self.score >= self._next_extra_life:
             self.lives += 1
             self._next_extra_life += 60000
-            self._draw_lives()
+            self._update_lives()
 
     def on_brick_collide(self, brick, sprite):
         """Called by a sprite when it collides with a brick.
@@ -1358,6 +1416,11 @@ class Game:
         """
         # Increment the collision count.
         brick.collision_count += 1
+
+        # Reset the brick timeout — a destructible brick was hit.
+        # Gold bricks are indestructible, so hitting them does not count.
+        if brick.colour != BrickColour.gold:
+            self._brick_timer = 0
 
         # Play the appropriate brick-hit sound.
         if brick.colour == BrickColour.gold or \
@@ -1377,10 +1440,6 @@ class Game:
                 # Add this brick's value to the score.
                 self.score += brick.value
                 self._check_extra_life()
-
-            # Tell the round that a brick has gone, so that it can decide
-            # whether the round is completed.
-            self.round.brick_destroyed()
 
         if brick.powerup_cls:
             # There is a powerup in the brick.
@@ -1497,6 +1556,12 @@ class Game:
             if not isinstance(self.state, BallOffScreenState):
                 self.state = BallOffScreenState(self)
 
+    def _open_quit_prompt(self):
+        """Show the quit-prompt overlay. No-op if already showing."""
+        if not self._quit_prompt:
+            self._quit_prompt = True
+            self.paused = True
+
     def _create_event_handlers(self):
         """Create the event handlers for paddle movement."""
         keys_down = 0
@@ -1541,14 +1606,16 @@ class Game:
         self.handler_toggle_pause = toggle_pause
 
         def handle_esc(event):
-            """ESC opens the quit-prompt overlay; a second ESC dismisses it."""
+            """ESC toggles the quit-prompt overlay; Alt+F4 opens it."""
             if event.key == pygame.K_ESCAPE:
                 if not self._quit_prompt:
-                    self._quit_prompt = True
-                    self.paused = True
+                    self._open_quit_prompt()
                 else:
                     self._quit_prompt = False
                     self.paused = False
+            elif (event.key == pygame.K_F4
+                  and (event.mod & pygame.KMOD_ALT)):
+                self._open_quit_prompt()
         self.handler_esc = handle_esc
 
         def handle_quit_response(event):
@@ -1895,7 +1962,20 @@ class RoundPlayState(BaseState):
 
     def update(self):
         if self.game.round.complete:
-            self.game.state = RoundEndState(self.game)
+            # Deactivate any active powerup.
+            if self.game.active_powerup:
+                self.game.active_powerup.deactivate()
+                self.game.active_powerup = None
+
+            # Advance to the next round immediately.
+            self.game.balls = self.game.balls[:1]
+            self.game.enemies.clear()
+            if self.game.round.next_round is not None:
+                self.game.round = self.game.round.next_round(TOP_OFFSET)
+                self.game.state = RoundStartState(
+                    self.game, consume_startup_life=False)
+            else:
+                self.game.state = GameEndState(self.game)
 
 
 class BallOffScreenState(BaseState):
@@ -1947,6 +2027,10 @@ class RoundRestartState(RoundStartState):
         # Cancel any existing open door requests.
         self.game.round.edges.top.cancel_open_door()
 
+        # Clear stale enemy references so new enemies are created
+        # via on_brick_collide when the round resumes.
+        self.game.enemies.clear()
+
         # Whether the enemies have been re-released for this round restart.
         self._enemies_rereleased = False
 
@@ -1969,157 +2053,13 @@ class RoundRestartState(RoundStartState):
         if self._update_count > 100:
             # Update the number of lives when we display the caption.
             self.game.lives = self._lives
-        if self._update_count > 340:
-            # Re-release any enemies that were previously active.
-            if not self._enemies_rereleased:
+
+        # Re-create and release enemies after the round restarts.
+        if self._update_count == 340 and not self.game.enemies:
+            if self.game.round.can_release_enemies():
+                self.game._setup_enemies()
                 for enemy in self.game.enemies:
                     self.game.release_enemy(enemy)
-                self._enemies_rereleased = True
-
-
-class RoundEndState(BaseState):
-    """Transition effect between rounds.
-
-    Phases:
-      1. Fade the play area to black.                          (30 frames)
-      2. Show a full-screen starfield with "Level X" text.    (120 frames)
-      3. Fade from black to the new play area.                 (30 frames)
-    """
-
-    FADE_OUT_FRAMES = 30
-    ANNOUNCE_FRAMES = 120
-    FADE_IN_FRAMES = 30
-    TOTAL_FRAMES = FADE_OUT_FRAMES + ANNOUNCE_FRAMES + FADE_IN_FRAMES
-
-    def __init__(self, game):
-        super().__init__(game)
-
-        # Deactivate any active powerup.
-        if self.game.active_powerup:
-            self.game.active_powerup.deactivate()
-            self.game.active_powerup = None
-
-        # Determine the next round number for the announcement text.
-        self._next_round_name = None
-        if self.game.round.next_round is not None:
-            self._next_round_name = self.game.round.next_round.__name__
-            # e.g. 'Round2' -> 'Level 2'
-            num = ''.join(c for c in self._next_round_name if c.isdigit())
-            self._next_round_name = 'Level {}'.format(num)
-
-        self._update_count = 0
-
-        # Cache the screen surface (BaseState does not provide one).
-        self._screen = self.game._screen
-
-        # Full-screen starfield for the transition.
-        self._stars = []
-        self._star_center_x = self._screen.get_width() // 2
-        self._star_center_y = self._screen.get_height() // 2
-        self._star_speed_choices = [0.1, 0.15, 0.4, 0.6]
-        self._star_count = 200
-        self._star_flicker_chance = 0.01
-
-        # Create a black overlay surface for fading.
-        self._fade_surface = pygame.Surface(self._screen.get_size())
-        self._fade_surface.fill((0, 0, 0))
-
-    def _init_stars(self):
-        """Populate the full-screen starfield."""
-        screen_w, screen_h = self._screen.get_size()
-        self._star_center_x = screen_w // 2
-        self._star_center_y = screen_h // 2
-        for _ in range(self._star_count):
-            star = [0, 0, 0, 0, 0, True]
-            self._reset_star(star)
-            self._stars.append(star)
-
-    def _reset_star(self, star):
-        """Re-seed a star with a fresh random position and direction."""
-        screen_w, screen_h = self._screen.get_size()
-        star[0] = random.uniform(0, screen_w)
-        star[1] = random.uniform(0, screen_h)
-        dx = star[0] - self._star_center_x
-        dy = star[1] - self._star_center_y
-        dist = math.hypot(dx, dy)
-        if dist == 0:
-            star[2], star[3] = 1.0, 0.0
-        else:
-            star[2], star[3] = dx / dist, dy / dist
-        star[4] = random.choice(self._star_speed_choices)
-        star[5] = True
-
-    def _update_and_draw_stars(self):
-        """Advance and draw the full-screen starfield."""
-        screen_w, screen_h = self._screen.get_size()
-        for star in self._stars:
-            star[0] += star[2] * star[4]
-            star[1] += star[3] * star[4]
-            if random.random() < self._star_flicker_chance:
-                star[5] = not star[5]
-            if (star[0] < -2 or star[0] > screen_w + 2 or
-                    star[1] < -2 or star[1] > screen_h + 2):
-                self._reset_star(star)
-                continue
-            if star[5]:
-                pygame.draw.circle(self._screen, (255, 255, 255),
-                                   (int(star[0]), int(star[1])), 1)
-
-    def update(self):
-        count = self._update_count
-
-        # Phase 1: fade out — darken the play area.
-        if count < self.FADE_OUT_FRAMES:
-            # Hide all gameplay sprites during the fade.
-            for ball in self.game.balls:
-                ball.speed = 0
-                ball.visible = False
-            self.game.paddle.visible = False
-            for enemy in self.game.enemies:
-                enemy.visible = False
-            self.game.enemies.clear()
-            self.game.round.edges.top.cancel_open_door()
-
-            alpha = int(255 * count / self.FADE_OUT_FRAMES)
-            self._fade_surface.set_alpha(alpha)
-            self._screen.blit(self._fade_surface, (0, 0))
-
-        # Phase 2: starfield + announcement text.
-        elif count < self.FADE_OUT_FRAMES + self.ANNOUNCE_FRAMES:
-            self._screen.fill((0, 0, 0))
-            if not self._stars:
-                self._init_stars()
-            self._update_and_draw_stars()
-            if self._next_round_name:
-                ptext.draw(self._next_round_name,
-                           center=(self._screen.get_width() // 2,
-                                   self._screen.get_height() // 2),
-                           fontname=ALT_FONT,
-                           fontsize=s(72),
-                           color=(255, 255, 255),
-                           shadow=(2.0, 2.0),
-                           scolor=(80, 80, 80))
-
-        # Phase 3: fade in from black.
-        elif count < self.TOTAL_FRAMES:
-            progress = count - self.FADE_OUT_FRAMES - self.ANNOUNCE_FRAMES
-            alpha = int(255 * (1.0 - progress / self.FADE_IN_FRAMES))
-            self._fade_surface.set_alpha(alpha)
-            self._screen.blit(self._fade_surface, (0, 0))
-
-        # Transition complete — move to the next round.
-        if count >= self.TOTAL_FRAMES:
-            self.game.balls = self.game.balls[:1]
-            if self.game.round.next_round is not None:
-                self.game.round = self.game.round.next_round(TOP_OFFSET)
-                self.game.state = RoundStartState(
-                    self.game, consume_startup_life=False)
-            else:
-                self.game.state = GameEndState(self.game)
-
-        self._update_count += 1
-
-        self._update_count += 1
 
 
 class GameEndState(BaseState):

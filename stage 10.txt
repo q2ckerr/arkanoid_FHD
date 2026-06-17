@@ -1,0 +1,55 @@
+LEVEL_8_LAYOUT = [
+    # Row 0: 
+    [None, 'gold', None, None, None, None, None, None, None, None, None, None, None],
+
+    # Row 1: 
+    [None, None, None, None, None, None, None, None, None, None, None, None, None],
+
+    # Row 2: 
+    [None, 'gold', None, None, None, None, None, None, None, None, None, None, None],
+
+    # Row 3: 
+    [None, 'gold', None, None, None, None, None, None, None, None, None, None, None],
+
+    # Row 4: 
+    [None, 'gold', None, None, None, None, None, None, None, None, None, None, None],
+
+    # Row 5: 
+    [None, 'gold', None, None, None, None, None, blue, None, None, None, None, None],
+
+    # Row 6: 
+    [None, 'gold', None, None, None, None, blue, cyan, blue, None, None, None, None],
+
+    # Row 7: 
+    [None, 'gold', None, None, None, blue, cyan, white, cyan, blue, None, None, None],
+
+    # Row 8: 
+    [None, 'gold', None, None, blue, cyan, white, cyan, white, cyan, blue, None, None],
+
+    # Row 9: 
+    [None, 'gold', None, blue, cyan, white, cyan, silver, cyan, white, cyan, blue, None],
+
+    # Row 10: 
+    [None, 'gold', None, None, blue, cyan, white, cyan, white, cyan, blue, None, None],
+
+    # Row 11:
+    [None, 'gold', None, None, None, blue, cyan, white, cyan, blue, None, None, None],
+
+    # Row 12:
+    [None, 'gold', None, None, None, None, blue, cyan, blue, None, None, None, None],
+
+    # Row 13:
+    [None, 'gold', None, None, None, None, None, blue, None, None, None, None, None],
+
+    # Row 14: 
+    [None, 'gold', None, None, None, None, None, None, None, None, None, None, None],
+
+    # Row 15: 
+    [None, 'gold', None, None, None, None, None, None, None, None, None, None, None],
+
+    # Row 16: 
+    [None, 'gold', None, None, None, None, None, None, None, None, None, None, None],
+
+    # Row 17: 
+    [None, 'gold', 'gold', 'gold', 'gold', 'gold', 'gold', 'gold', 'gold', 'gold', 'gold', 'gold', 'gold'],
+]

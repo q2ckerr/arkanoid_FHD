@@ -79,3 +79,21 @@ def play_laser():
 def play_level_start():
     """New round begins."""
     _play('level_start.mp3')
+
+
+def play_intro():
+    """Start screen background music (loops forever)."""
+    if pygame.mixer.music.get_busy():
+        return
+    path = os.path.join(_sound_dir, 'intro.mp3')
+    try:
+        pygame.mixer.music.load(path)
+        pygame.mixer.music.set_volume(0.5)
+        pygame.mixer.music.play(-1)
+    except Exception:
+        LOG.warning('Could not load music: %s', path)
+
+
+def stop_music():
+    """Stop any currently-playing music."""
+    pygame.mixer.music.stop()

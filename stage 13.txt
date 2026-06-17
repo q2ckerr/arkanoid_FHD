@@ -1,0 +1,29 @@
+LEVEL_13_LAYOUT = [
+    # Row 0: 
+    [None, 'yellow', 'yellow', 'yellow', None, 'white', 'white', 'white', None, 'yellow', 'yellow', 'yellow', None ],
+
+    # Row 1: 
+    [None, 'pink', 'pink', 'pink', None, 'orange', 'orange', 'orange', None, 'pink', 'pink', 'pink', None ],
+
+    # Row 2: 
+    [None, 'blue', 'blue', 'blue', None, 'cyan', 'cyan', 'cyan', None, 'blue', 'blue', 'blue', None ],
+
+    # Row 3: 
+    [None, 'red', 'red', 'red', None, 'green', 'green', 'green', None, 'red', 'red', 'red', None ],
+
+    # Row 4: 
+    [None, 'green', 'green', 'green', None, 'red', 'red', 'red', None, 'green', 'green', 'green', None],
+
+    # Row 5: 
+    [None, 'cyan', 'cyan', 'cyan', None, 'blue', 'blue', 'blue', None, 'cyan', 'cyan', 'cyan', None],
+
+    # Row 6: 
+    [None, 'orange', 'orange', 'orange', None, 'pink', 'pink', 'pink', None, 'orange', 'orange', 'orange', None],
+
+    # Row 7: 
+    [None, 'white', 'white', 'white', None, 'yellow', 'yellow', 'yellow', None, 'white', 'white', 'white', None],
+
+
+
+
+   

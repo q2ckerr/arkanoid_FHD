@@ -2,6 +2,7 @@ import pygame
 
 from arkanoid.rounds.base import (BaseRound,
                                   BLUE)
+from arkanoid.rounds.round10 import Round10
 from arkanoid.sprites.brick import (Brick,
                                     BrickColour)
 from arkanoid.sprites.enemy import EnemyType
@@ -102,8 +103,7 @@ class Round9(BaseRound):
     row of bricks at game y=4 so the four rows above remain clear
     for the enemy spawn zone.
 
-    On completion there is no next round — ``self.next_round`` stays
-    at the base-class default of ``None``.
+    On completion advances to round 10.
     """
 
     _TOP_ROW_START = 4
@@ -112,6 +112,7 @@ class Round9(BaseRound):
         super().__init__(top_offset)
 
         self.name = 'Round 9'
+        self.next_round = Round10
         self.enemy_type = EnemyType.cube
         self.num_enemies = 3
 
