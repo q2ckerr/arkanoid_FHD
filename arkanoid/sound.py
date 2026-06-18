@@ -97,3 +97,13 @@ def play_intro():
 def stop_music():
     """Stop any currently-playing music."""
     pygame.mixer.music.stop()
+
+
+def play_boss_hit():
+    """Boss brick hit by ball."""
+    _play('boss_hit.mp3')
+
+
+def play_extra_life():
+    """Extra life gained."""
+    _play('extra_life.mp3')

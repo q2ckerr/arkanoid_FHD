@@ -277,12 +277,12 @@ class TestPaddle(TestCase):
             angle = Paddle.bounce_strategy(paddle, ball)
             angles.append(int(math.degrees(angle)))
 
-        self.assertEqual(angles[0], 220)
-        self.assertEqual(angles[1], 245)
-        self.assertEqual(angles[2], 260)
-        self.assertEqual(angles[3], 280)
-        self.assertEqual(angles[4], 295)
-        self.assertEqual(angles[5], 320)
+        self.assertEqual(angles[0], 210)
+        self.assertEqual(angles[1], 210)
+        self.assertEqual(angles[2], 270)
+        self.assertEqual(angles[3], 270)
+        self.assertEqual(angles[4], 330)
+        self.assertEqual(angles[5], 330)
 
 
 class TestLaserState(TestCase):

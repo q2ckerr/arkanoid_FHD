@@ -50,7 +50,12 @@ class PowerUp(pygame.sprite.Sprite):
             image for image, _ in load_png_sequence(png_prefix))
         self._animation_start = 0
 
-        self.image = None
+        # Load the first frame immediately so self.image is never None
+        # when the sprite is added to a draw group.
+        try:
+            self.image = next(self._animation)
+        except StopIteration:
+            self.image = None
         # Position the powerup by the position of the brick which contained it.
         self.rect = pygame.Rect(brick.rect.bottomleft,
                                 (brick.rect.width, brick.rect.height))
@@ -132,7 +137,9 @@ class ExtraLifePowerUp(PowerUp):
 
     def _activate(self):
         """Add an extra life to the game."""
+        from arkanoid.sound import play_extra_life
         self.game.lives += 1
+        play_extra_life()
 
     def deactivate(self):
         """Deactivate the current powerup by returning the game state back

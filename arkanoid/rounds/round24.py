@@ -1,29 +1,32 @@
 import pygame
 
 from arkanoid.rounds.base import (BaseRound, BLUE)
-from arkanoid.rounds.round21 import Round21
+from arkanoid.rounds.round25 import Round25
 from arkanoid.sprites.brick import (Brick, BrickColour)
 from arkanoid.sprites.enemy import EnemyType
 from arkanoid.sprites.powerup import (CatchPowerUp, DuplicatePowerUp,
                                       ExpandPowerUp, ExtraLifePowerUp,
                                       LaserPowerUp, SlowBallPowerUp)
 
-# stage_20.txt — 5 empty rows trimmed, first brick at row 0.
 LAYOUT = [
-    ['gold', 'white', 'gold', 'orange', 'gold', 'teal', 'gold', 'green', 'gold', 'red', 'gold', 'blue', 'gold'],
-    ['gold', 'pink', 'gold', 'silver', 'gold', 'silver', 'gold', 'silver', 'gold', 'silver', 'gold', 'yellow', 'gold'],
     [None, None, None, None, None, None, None, None, None, None, None, None, None],
-    ['gold', 'pink', 'gold', None, 'gold', None, 'gold', None, 'gold', None, 'gold', None, 'gold'],
-    ['gold', None, 'gold', 'pink', 'gold', None, 'gold', None, 'gold', None, 'gold', None, 'gold'],
-    ['gold', None, 'gold', None, 'gold', 'pink', 'gold', None, 'gold', None, 'gold', None, 'gold'],
-    ['gold', None, 'gold', None, 'gold', None, 'gold', 'pink', 'gold', None, 'gold', None, 'gold'],
-    ['gold', None, 'gold', None, 'gold', None, 'gold', None, 'gold', 'pink', 'gold', None, 'gold'],
     [None, None, None, None, None, None, None, None, None, None, None, None, None],
-    [None, None, 'gold', None, 'gold', None, 'gold', None, 'gold', 'pink', 'gold', None, None],
-    [None, None, 'gold', None, 'gold', None, 'gold', 'pink', 'gold', None, 'gold', None, None],
-    [None, None, 'gold', None, 'gold', 'pink', 'gold', None, 'gold', None, 'gold', None, None],
-    [None, None, None, 'pink', 'gold', None, 'gold', None, 'gold', None, None, None, None],
-    [None, 'pink', None, None, None, None, 'gold', None, None, None, None, None, None],
+    [None, None, None, None, None, None, None, None, None, None, None, None, None],
+    [None, None, None, None, None, None, None, None, None, None, None, None, None],
+    [None, None, None, None, None, None, None, None, None, None, None, None, None],
+    [None, None, None, None, None, None, None, None, None, None, None, None, None],
+    [None, None, None, None, None, None, None, None, None, None, None, None, None],
+    [None, None, None, None, None, 'white', 'white', 'white', None, None, None, None, None],
+    [None, None, None, None, None, 'white', 'white', 'white', None, None, None, None, None],
+    [None, None, None, None, None, 'white', 'white', 'white', None, None, None, None, None],
+    [None, None, None, None, 'white', 'white', 'white', 'white', 'white', None, None, None, None],
+    [None, None, None, None, 'white', 'blue', 'white', 'blue', 'white', None, None, None, None],
+    [None, None, None, 'white', 'blue', 'blue', 'white', 'blue', 'blue', 'white', None, None, None],
+    [None, None, None, 'blue', 'blue', 'blue', 'blue', 'blue', 'blue', 'blue', None, None, None],
+    [None, None, 'blue', 'blue', 'blue', 'blue', 'blue', 'blue', 'blue', 'blue', 'blue', None, None],
+    [None, None, 'blue', 'blue', 'blue', 'blue', 'blue', 'blue', 'blue', 'blue', 'blue', None, None],
+    [None, 'blue', 'blue', 'blue', 'blue', 'blue', 'blue', 'blue', 'blue', 'blue', 'blue', 'blue', None],
+    ['blue', 'blue', 'blue', 'blue', 'blue', 'blue', 'blue', 'blue', 'blue', 'blue', 'blue', 'blue', 'blue'],
 ]
 
 _COLOUR_MAP = {
@@ -34,19 +37,19 @@ _COLOUR_MAP = {
 }
 
 POWERUPS = {
-    (0, 0): LaserPowerUp, (12, 0): ExpandPowerUp,
-    (3, 4): CatchPowerUp, (7, 6): DuplicatePowerUp,
-    (0, 1): ExtraLifePowerUp, (12, 1): SlowBallPowerUp,
+    (5, 7): LaserPowerUp, (7, 7): ExpandPowerUp,
+    (6, 11): CatchPowerUp, (3, 13): DuplicatePowerUp,
+    (0, 17): ExtraLifePowerUp, (12, 17): SlowBallPowerUp,
 }
 
 
-class Round20(BaseRound):
-    _TOP_ROW_START = 4
+class Round24(BaseRound):
+    _TOP_ROW_START = 0
 
     def __init__(self, top_offset):
         super().__init__(top_offset)
-        self.name = 'Round 20'
-        self.next_round = Round21
+        self.name = 'Round 24'
+        self.next_round = Round25
         self.enemy_type = EnemyType.molecule
         self.num_enemies = 3
 

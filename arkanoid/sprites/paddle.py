@@ -253,12 +253,13 @@ class Paddle(pygame.sprite.Sprite):
         half_w = paddle_rect.width / 2.0
         offset = (ball_rect.centerx - paddle_cx) / half_w
 
-        # The outer 20 % on each side produces the maximum deflection.
-        # Map |offset| from [0 .. 0.8] → [0 .. 1], clamped.
-        t = max(0.0, min(1.0, (abs(offset) - 0.2) / 0.6)) if abs(offset) > 0.2 else 0.0
+        # The outer 25 % on each side produces the maximum deflection.
+        # Map |offset| from [0 .. 0.5] → [0 .. 1], clamped.
+        t = max(0.0, min(1.0, (abs(offset) - 0.2) / 0.3)) if abs(offset) > 0.2 else 0.0
 
-        # Straight up is 270°. Maximum deflection is ±50°.
-        MAX_DEFLECT = 50  # degrees
+        # Straight up is 270°. Maximum deflection is ±60° (30° from
+        # horizontal) on the left and right quarters of the paddle.
+        MAX_DEFLECT = 60  # degrees
         angle_deg = 270 + (MAX_DEFLECT * t * (1 if offset >= 0 else -1))
 
         return math.radians(angle_deg)

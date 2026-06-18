@@ -1,0 +1,73 @@
+import pygame
+
+from arkanoid.rounds.base import (BaseRound, BLUE)
+from arkanoid.rounds.round22 import Round22
+from arkanoid.sprites.brick import (Brick, BrickColour)
+from arkanoid.sprites.enemy import EnemyType
+from arkanoid.sprites.powerup import (CatchPowerUp, DuplicatePowerUp,
+                                      ExpandPowerUp, ExtraLifePowerUp,
+                                      LaserPowerUp, SlowBallPowerUp)
+
+LAYOUT = [
+    [None, 'gold', 'orange', 'orange', 'orange', 'orange', 'orange', 'orange', 'orange', 'orange', 'orange', 'gold', None],
+    [None, 'gold', None, None, None, None, None, None, None, None, None, 'gold', None],
+    [None, 'gold', None, 'gold', 'gold', 'gold', 'gold', 'gold', 'gold', 'gold', None, 'gold', None],
+    [None, 'gold', None, 'gold', None, None, None, None, None, 'gold', None, 'gold', None],
+    [None, 'gold', None, 'gold', None, None, None, None, None, 'gold', None, 'gold', None],
+    [None, 'gold', None, 'gold', None, 'red', 'red', 'red', None, 'gold', None, 'gold', None],
+    [None, 'gold', None, 'gold', None, 'green', 'green', 'green', None, 'gold', None, 'gold', None],
+    [None, 'gold', None, 'gold', None, 'blue', 'blue', 'blue', None, 'gold', None, 'gold', None],
+    [None, 'gold', None, 'gold', None, 'white', 'white', 'white', None, 'gold', None, 'gold', None],
+    [None, 'gold', None, 'gold', None, None, None, None, None, 'gold', None, 'gold', None],
+    [None, 'gold', None, 'gold', 'teal', 'teal', 'teal', 'teal', 'teal', 'gold', None, 'gold', None],
+    [None, 'gold', None, None, None, None, None, None, None, None, None, 'gold', None],
+    [None, 'gold', None, None, None, None, None, None, None, None, None, 'gold', None],
+    [None, 'gold', 'gold', 'gold', 'gold', 'gold', 'gold', 'gold', 'gold', 'gold', 'gold', 'gold', None],
+]
+
+_COLOUR_MAP = {
+    'blue': BrickColour.blue, 'cyan': BrickColour.cyan, 'gold': BrickColour.gold,
+    'green': BrickColour.green, 'orange': BrickColour.orange, 'pink': BrickColour.pink,
+    'red': BrickColour.red, 'silver': BrickColour.silver, 'teal': BrickColour.cyan,
+    'white': BrickColour.white, 'yellow': BrickColour.yellow,
+}
+
+POWERUPS = {
+    (4, 0): LaserPowerUp, (8, 0): ExpandPowerUp,
+    (6, 9): CatchPowerUp, (6, 10): DuplicatePowerUp,
+    (1, 5): ExtraLifePowerUp, (11, 5): SlowBallPowerUp,
+}
+
+
+class Round21(BaseRound):
+    _TOP_ROW_START = 4
+
+    def __init__(self, top_offset):
+        super().__init__(top_offset)
+        self.name = 'Round 21'
+        self.next_round = Round22
+        self.enemy_type = EnemyType.cube
+        self.num_enemies = 3
+
+    def can_release_enemies(self):
+        return True
+
+    def _get_background_colour(self):
+        return BLUE
+
+    def _create_background(self):
+        from arkanoid.rounds.background import create_hex_background
+        return create_hex_background(self.screen, self.edges)
+
+    def _create_bricks(self):
+        bricks = []
+        for row_offset, row in enumerate(LAYOUT):
+            y = self._TOP_ROW_START + row_offset
+            for x, colour_name in enumerate(row):
+                if colour_name is None:
+                    continue
+                colour = _COLOUR_MAP[colour_name]
+                powerup_cls = POWERUPS.get((x, y))
+                brick = Brick(colour, 9, powerup_cls=powerup_cls)
+                bricks.append(self._blit_brick(brick, x, y))
+        return pygame.sprite.Group(*bricks)

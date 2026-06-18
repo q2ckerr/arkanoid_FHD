@@ -1,29 +1,27 @@
 import pygame
 
 from arkanoid.rounds.base import (BaseRound, BLUE)
-from arkanoid.rounds.round21 import Round21
+from arkanoid.rounds.round24 import Round24
 from arkanoid.sprites.brick import (Brick, BrickColour)
 from arkanoid.sprites.enemy import EnemyType
 from arkanoid.sprites.powerup import (CatchPowerUp, DuplicatePowerUp,
                                       ExpandPowerUp, ExtraLifePowerUp,
                                       LaserPowerUp, SlowBallPowerUp)
 
-# stage_20.txt — 5 empty rows trimmed, first brick at row 0.
 LAYOUT = [
-    ['gold', 'white', 'gold', 'orange', 'gold', 'teal', 'gold', 'green', 'gold', 'red', 'gold', 'blue', 'gold'],
-    ['gold', 'pink', 'gold', 'silver', 'gold', 'silver', 'gold', 'silver', 'gold', 'silver', 'gold', 'yellow', 'gold'],
+    ['teal', 'teal', 'teal', 'teal', 'teal', 'teal', 'teal', 'teal', 'teal', 'teal', 'teal', 'teal', 'teal'],
     [None, None, None, None, None, None, None, None, None, None, None, None, None],
-    ['gold', 'pink', 'gold', None, 'gold', None, 'gold', None, 'gold', None, 'gold', None, 'gold'],
-    ['gold', None, 'gold', 'pink', 'gold', None, 'gold', None, 'gold', None, 'gold', None, 'gold'],
-    ['gold', None, 'gold', None, 'gold', 'pink', 'gold', None, 'gold', None, 'gold', None, 'gold'],
-    ['gold', None, 'gold', None, 'gold', None, 'gold', 'pink', 'gold', None, 'gold', None, 'gold'],
-    ['gold', None, 'gold', None, 'gold', None, 'gold', None, 'gold', 'pink', 'gold', None, 'gold'],
+    [None, None, 'silver', 'silver', 'silver', None, 'silver', 'silver', 'silver', None, 'silver', 'silver', 'silver'],
+    [None, None, 'silver', 'green', 'silver', None, 'silver', 'green', 'silver', None, 'silver', 'green', 'silver'],
+    [None, None, 'silver', 'silver', 'silver', None, 'silver', 'silver', 'silver', None, 'silver', 'silver', 'silver'],
     [None, None, None, None, None, None, None, None, None, None, None, None, None],
-    [None, None, 'gold', None, 'gold', None, 'gold', None, 'gold', 'pink', 'gold', None, None],
-    [None, None, 'gold', None, 'gold', None, 'gold', 'pink', 'gold', None, 'gold', None, None],
-    [None, None, 'gold', None, 'gold', 'pink', 'gold', None, 'gold', None, 'gold', None, None],
-    [None, None, None, 'pink', 'gold', None, 'gold', None, 'gold', None, None, None, None],
-    [None, 'pink', None, None, None, None, 'gold', None, None, None, None, None, None],
+    [None, 'silver', 'silver', 'silver', None, 'silver', 'silver', 'silver', None, 'silver', 'silver', 'silver', None],
+    [None, 'silver', 'red', 'silver', None, 'silver', 'red', 'silver', None, 'silver', 'red', 'silver', None],
+    [None, 'silver', 'silver', 'silver', None, 'silver', 'silver', 'silver', None, 'silver', 'silver', 'silver', None],
+    [None, None, None, None, None, None, None, None, None, None, None, None, None],
+    ['silver', 'silver', 'silver', None, 'silver', 'silver', 'silver', None, 'silver', 'silver', 'silver', None, None],
+    ['silver', 'blue', 'silver', None, 'silver', 'blue', 'silver', None, 'silver', 'blue', 'silver', None, None],
+    ['silver', 'silver', 'silver', None, 'silver', 'silver', 'silver', None, 'silver', 'silver', 'silver', None, None],
 ]
 
 _COLOUR_MAP = {
@@ -35,19 +33,19 @@ _COLOUR_MAP = {
 
 POWERUPS = {
     (0, 0): LaserPowerUp, (12, 0): ExpandPowerUp,
-    (3, 4): CatchPowerUp, (7, 6): DuplicatePowerUp,
-    (0, 1): ExtraLifePowerUp, (12, 1): SlowBallPowerUp,
+    (7, 3): CatchPowerUp, (1, 7): DuplicatePowerUp,
+    (0, 10): ExtraLifePowerUp, (5, 11): SlowBallPowerUp,
 }
 
 
-class Round20(BaseRound):
+class Round23(BaseRound):
     _TOP_ROW_START = 4
 
     def __init__(self, top_offset):
         super().__init__(top_offset)
-        self.name = 'Round 20'
-        self.next_round = Round21
-        self.enemy_type = EnemyType.molecule
+        self.name = 'Round 23'
+        self.next_round = Round24
+        self.enemy_type = EnemyType.pyramid
         self.num_enemies = 3
 
     def can_release_enemies(self):
@@ -57,8 +55,8 @@ class Round20(BaseRound):
         return BLUE
 
     def _create_background(self):
-        from arkanoid.rounds.background import create_chevron_background
-        return create_chevron_background(self.screen, self.edges)
+        from arkanoid.rounds.background import create_rects_background
+        return create_rects_background(self.screen, self.edges)
 
     def _create_bricks(self):
         bricks = []

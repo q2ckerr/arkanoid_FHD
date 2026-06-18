@@ -8,6 +8,7 @@ import weakref
 import pygame
 
 from arkanoid.utils.util import load_png_sequence
+from arkanoid.sprites.edge import SideEdge, TopEdge
 
 LOG = logging.getLogger(__name__)
 
@@ -99,7 +100,7 @@ class Enemy(pygame.sprite.Sprite):
         # and which also defines its dimensions - which must be big enough
         # to fit the largest of the frames in the animation.
         self.rect = pygame.Rect(self._area.center, (width, height))
-        self.image = None
+        self.image, _ = next(self._animation)
 
         # The exploding animation when we've been struck by the ball or paddle.
         self._explode_animation = None
@@ -132,6 +133,16 @@ class Enemy(pygame.sprite.Sprite):
 
         # Sprite visibility toggle.
         self.visible = True
+
+        # Stale-position detector: if the enemy barely moves for a
+        # number of frames, force a horizontal direction change.
+        self._stale_check_pos = None
+        self._stale_check_frame = 0
+
+        # Collision streak: counts consecutive frames the enemy has
+        # been in collision mode.  If it exceeds a threshold the
+        # enemy is trapped (e.g. wide U-shape) and must go UP.
+        self._collision_streak = 0
 
     def _load_animation_sequence(self, filename_prefix):
         """Load and return the image sequence for the animated sprite, and
@@ -182,19 +193,39 @@ class Enemy(pygame.sprite.Sprite):
                 # Calculate a new position based on the current direction.
                 self.rect = self._calc_new_position()
 
-                # Clamp: enemies must not go below the paddle.
-                paddle_top = self._paddle.rect.top
-                if self.rect.bottom > paddle_top:
-                    self.rect.bottom = paddle_top
-                    # Bounce upward if we were heading down.
-                    if math.sin(self._direction) > 0:
-                        self._direction = -self._direction
+                # Clamp to play area boundaries so enemies cannot pass
+                # through walls.  Find the left/right/top edges from the
+                # collidable sprites.
+                for sprite in self._collidable_sprites:
+                    if not sprite.visible:
+                        continue
+                    if isinstance(sprite, SideEdge):
+                        if (sprite.rect.left < self._area.centerx
+                                and self.rect.left < sprite.rect.right):
+                            self.rect.left = sprite.rect.right
+                            if math.cos(self._direction) < 0:
+                                self._direction = -self._direction
+                        elif (sprite.rect.right > self._area.centerx
+                              and self.rect.right > sprite.rect.left):
+                            self.rect.right = sprite.rect.left
+                            if math.cos(self._direction) > 0:
+                                self._direction = -self._direction
+                    elif isinstance(sprite, TopEdge):
+                        if self.rect.top < sprite.rect.bottom:
+                            self.rect.top = sprite.rect.bottom
+                            if math.sin(self._direction) < 0:
+                                self._direction = -self._direction
 
+                # Check paddle collision before clamping so the enemy
+                # can reach the paddle level and be destroyed.
                 if self._area.contains(self.rect):
                     if pygame.sprite.spritecollide(self, [self._paddle],
                                                    False):
                         self._on_paddle_collide(self, self._paddle)
                     else:
+                        # Separate from other enemies so they don't stack.
+                        self._separate_from_enemies()
+
                         visible_sprites = itertools.chain(
                             (sprite for sprite in self._collidable_sprites if
                              sprite.visible),
@@ -215,12 +246,23 @@ class Enemy(pygame.sprite.Sprite):
 
                         if sprites_collided:
                             self._last_contact = self._update_count
-                            self._direction = self._calc_direction_collision(
-                                sprites_collided)
+                            self._duration = 0
+                            self._collision_streak += 1
+                            # Trapped too long (wide U-shape or
+                            # enclosed on several sides) — go straight
+                            # up until side blocks are cleared.
+                            if self._collision_streak > 60:
+                                self._direction = math.pi + HALF_PI
+                                self._collision_streak = 0
+                            else:
+                                self._direction = \
+                                    self._calc_direction_collision(
+                                        sprites_collided)
                         elif self._update_count > self._last_contact + 30:
                             # Last contact not made for past 30 updates, so
                             # recalculate direction using free movement
                             # algorithm.
+                            self._collision_streak = 0
                             if not self._duration:
                                 # The duration of the previous direction of
                                 # free movement has elapsed, so calculate a new
@@ -236,11 +278,22 @@ class Enemy(pygame.sprite.Sprite):
                                 self._duration = 0
 
                         #####################################################
+
                 else:
                     # We've dropped off the bottom of the screen.
                     if not self._on_destroyed_called:
                         self._on_destroyed(self)
                         self._on_destroyed_called = True
+
+                # Clamp: enemies must not go below the paddle.
+                paddle_top = self._paddle.rect.top
+                if self.rect.bottom > paddle_top:
+                    self.rect.bottom = paddle_top
+                    if math.sin(self._direction) > 0:
+                        self._direction = -self._direction
+
+                # Safety net: detect stale position and force horizontal.
+                self._check_stale()
 
         self._update_count += 1
 
@@ -254,6 +307,51 @@ class Enemy(pygame.sprite.Sprite):
         except StopIteration:
             self._explode_animation = None
             self._on_destroyed(self)
+
+    def _check_stale(self):
+        """If the enemy has barely moved for several frames, force a
+        horizontal direction to break any stuck loop."""
+        STALE_THRESHOLD = 4   # pixels
+        STALE_FRAMES = 30
+
+        if self._stale_check_pos is None:
+            self._stale_check_pos = self.rect.center
+            self._stale_check_frame = self._update_count
+            return
+
+        if self._update_count - self._stale_check_frame >= STALE_FRAMES:
+            dx = abs(self.rect.centerx - self._stale_check_pos[0])
+            dy = abs(self.rect.centery - self._stale_check_pos[1])
+            if dx + dy < STALE_THRESHOLD:
+                # Enemy is stuck — pick horizontal away from nearest wall.
+                if self.rect.centerx < self._area.centerx:
+                    self._direction = 0      # right
+                else:
+                    self._direction = math.pi  # left
+                self._duration = 0
+            self._stale_check_pos = self.rect.center
+            self._stale_check_frame = self._update_count
+
+    def _separate_from_enemies(self):
+        """Push this enemy away from any nearby enemies to prevent
+        stacking.  The nudge is proportional to the overlap so wider
+        enemies separate faster."""
+        for other in self._enemies:
+            if other is self or not other.visible:
+                continue
+            if not self.rect.colliderect(other.rect):
+                continue
+            # Overlapping — calculate overlap and nudge apart.
+            overlap_x = min(self.rect.right, other.rect.right) - max(
+                self.rect.left, other.rect.left)
+            dx = self.rect.centerx - other.rect.centerx
+            if dx == 0:
+                if self.rect.centerx < self._area.centerx:
+                    dx = 1
+                else:
+                    dx = -1
+            nudge = max(1, overlap_x // 2)
+            self.rect.x += nudge if dx > 0 else -nudge
 
     def _calc_new_position(self):
         offset_x = SPEED * math.cos(self._direction)
@@ -284,52 +382,75 @@ class Enemy(pygame.sprite.Sprite):
         rects = [sprite.rect for sprite in sprites_collided]
         cleft, cright, ctop, cbottom = False, False, False, False
 
-        for rect in rects:
-            # Work out which of our sides are in contact.
-            cleft = cleft or left.colliderect(rect)
-            cright = cright or right.colliderect(rect)
-            ctop = ctop or top.colliderect(rect)
-            cbottom = cbottom or bottom.colliderect(rect)
+        # Track which sides are blocked by walls (impassable) vs bricks.
+        left_is_wall = False
+        right_is_wall = False
+        top_is_wall = False
+
+        for sprite in sprites_collided:
+            is_wall = isinstance(sprite, (SideEdge, TopEdge))
+            if left.colliderect(sprite.rect):
+                cleft = True
+                if is_wall:
+                    left_is_wall = True
+            if right.colliderect(sprite.rect):
+                cright = True
+                if is_wall:
+                    right_is_wall = True
+            if top.colliderect(sprite.rect):
+                ctop = True
+                if is_wall:
+                    top_is_wall = True
+            if bottom.colliderect(sprite.rect):
+                cbottom = True
 
         direction = self._direction
 
-        # Work out the new direction based on what we've collided with.
-        if cleft and cright and ctop and cbottom:
-            # Completely surrounded — bounce back the way we came.
+        # === Wall collisions are top priority — always go away from
+        # the wall.  The enemy cannot pass through walls, but it can
+        # pass through bricks (which the ball may destroy).
+        if left_is_wall:
+            direction = 0       # left wall → go right
+        elif right_is_wall:
+            direction = math.pi  # right wall → go left
+        elif top_is_wall:
+            direction = random.choice([0, math.pi])  # top → horizontal
+
+        # === Brick / mixed collisions — use the existing side-detection
+        # logic below, but only if no wall was hit.
+        elif cleft and cright and ctop and cbottom:
             direction = -direction
         elif cleft and cright and cbottom:
-            # Blocked on both sides and below — escape upward.
             direction = math.pi + HALF_PI
         elif cleft and cright and ctop:
             direction = HALF_PI
         elif cleft and cbottom:
-            # Blocked on left and below — escape up or right.
-            direction = random.choice([0, math.pi + HALF_PI])
+            direction = 0
         elif cright and cbottom:
-            # Blocked on right and below — escape up or left.
-            direction = random.choice([math.pi, math.pi + HALF_PI])
+            direction = math.pi
         elif cbottom:
-            # Blocked below — escape upward or horizontal.
-            direction = random.choice([
-                0, math.pi,
-                math.pi + HALF_PI,
-                math.pi + HALF_PI,
-            ])
+            if self.rect.centerx < self._area.centerx:
+                direction = 0
+            else:
+                direction = math.pi
         elif ctop:
-            # Blocked above — escape downward or horizontal.
-            direction = random.choice([0, math.pi, HALF_PI])
+            # Brick above while going up → keep going up.
+            direction = math.pi + HALF_PI
         elif cleft:
-            # Blocked on left — escape right, sometimes up.
-            direction = random.choice([0, math.pi + HALF_PI])
+            # Brick on left while going up → keep going up.
+            if math.sin(self._direction) < -0.5:
+                direction = math.pi + HALF_PI
+            else:
+                direction = 0
         elif cright:
-            # Blocked on right — escape left, sometimes up.
-            direction = random.choice([math.pi, math.pi + HALF_PI])
+            # Brick on right while going up → keep going up.
+            if math.sin(self._direction) < -0.5:
+                direction = math.pi + HALF_PI
+            else:
+                direction = math.pi
         else:
-            # Any other combination causes a downward direction.
             direction = math.pi - HALF_PI
             if self._update_count % 60 == 0:
-                # Periodically try upward to avoid getting permanently
-                # stuck in a downward-only loop.
                 direction = random.choice([
                     math.pi - HALF_PI,
                     math.pi + HALF_PI,
@@ -374,3 +495,6 @@ class Enemy(pygame.sprite.Sprite):
         self._on_destroyed_called = False
         self.visible = True
         self.freeze = False
+        self._stale_check_pos = None
+        self._stale_check_frame = 0
+        self._collision_streak = 0

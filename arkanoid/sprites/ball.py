@@ -88,6 +88,11 @@ class Ball(pygame.sprite.Sprite):
         screen = pygame.display.get_surface()
         self._area = screen.get_rect()
 
+        # Optional horizontal bounds (min_x, max_x) for the ball's rect.
+        # When set, the ball cannot travel beyond these x-coordinates,
+        # preventing it from getting stuck between the paddle and a wall.
+        self._horizontal_bounds = None
+
         # The sprites the ball can collide with.
         self._collidable_sprites = pygame.sprite.Group()
 
@@ -96,6 +101,21 @@ class Ball(pygame.sprite.Sprite):
         # a 3-element tuple corresponding to the bounce strategy, speed
         # adjustment and collision callback for that sprite.
         self._collision_data = {}
+
+    def set_horizontal_bounds(self, left, right):
+        """Set horizontal bounds that the ball cannot travel beyond.
+
+        When set, the ball's rect.left will not go below ``left`` and
+        its rect.right will not go above ``right``.  If the ball reaches
+        a bound it bounces (reverses horizontal direction).
+
+        Args:
+            left:
+                Minimum x-coordinate for the ball's left edge.
+            right:
+                Maximum x-coordinate for the ball's right edge.
+        """
+        self._horizontal_bounds = (left, right)
 
     def add_collidable_sprite(self, sprite, bounce_strategy=None,
                               speed_adjust=0.0, on_collide=None):
@@ -183,6 +203,9 @@ class Ball(pygame.sprite.Sprite):
         ball = Ball(start_pos, start_angle, base_speed, top_speed,
                     normalisation_rate, off_screen_callback)
 
+        if self._horizontal_bounds:
+            ball.set_horizontal_bounds(*self._horizontal_bounds)
+
         for sprite in self._collidable_sprites:
             bounce_strategy, speed_adjust, on_collide = self._collision_data[
                 sprite]
@@ -200,6 +223,11 @@ class Ball(pygame.sprite.Sprite):
         # Get the new position of the ball.
         self.rect = self._calc_new_pos()
 
+        # Clamp to horizontal bounds (prevents ball from escaping
+        # between the paddle and a side wall).
+        if self._horizontal_bounds:
+            self._clamp_horizontal()
+
         if self._area.contains(self.rect):
             if not self._anchor:
                 # The ball is still on the screen and is not anchored, so see
@@ -214,6 +242,11 @@ class Ball(pygame.sprite.Sprite):
                 else:
                     # No collision. Bring speed back to base.
                     self._normalise_speed()
+
+            # Also check for stuck ball every frame, not just on
+            # collisions — the ball can loop horizontally in the gap
+            # between the paddle and a wall without hitting anything.
+            self._check_stuck()
         else:
             # Ball has gone off the screen.
             # Invoke the callback if we have one.
@@ -313,12 +346,12 @@ class Ball(pygame.sprite.Sprite):
         """
         # Only check when the ball is near the bottom of the play area
         # (close to the paddle).
-        if self.rect.bottom < self._area.bottom - 80:
+        if self.rect.bottom < self._area.bottom - 100:
             return
 
         # Check whether the ball is pressed against a side wall.
-        near_left = self.rect.left <= self._area.left + 5
-        near_right = self.rect.right >= self._area.right - 5
+        near_left = self.rect.left <= self._area.left + 8
+        near_right = self.rect.right >= self._area.right - 8
 
         if not near_left and not near_right:
             return
@@ -329,7 +362,7 @@ class Ball(pygame.sprite.Sprite):
 
         # If the vertical component is large enough the ball will
         # naturally escape the gap – no intervention needed.
-        if abs(vy) > abs(vx) * 0.5:
+        if abs(vy) > abs(vx) * 0.3:
             return
 
         # The ball is moving almost horizontally toward the wall.
@@ -338,6 +371,48 @@ class Ball(pygame.sprite.Sprite):
             self.angle = math.radians(315)   # right-up
         elif near_right and vx > 0:
             self.angle = math.radians(225)   # left-up
+
+    def _clamp_horizontal(self):
+        """Clamp the ball to its horizontal bounds, bouncing off
+        the boundary if the ball has reached it.
+
+        This prevents the ball from travelling into the narrow gap
+        between the paddle and a side wall where it can become
+        permanently stuck.
+        """
+        min_x, max_x = self._horizontal_bounds
+
+        if self.rect.left < min_x:
+            self.rect.left = min_x
+            self._bounce_vertical_wall()
+        elif self.rect.right > max_x:
+            self.rect.right = max_x
+            self._bounce_vertical_wall()
+
+    def _bounce_vertical_wall(self):
+        """Reverse the horizontal component of the ball's velocity,
+        simulating a bounce off a vertical surface.  After reversing,
+        add 5 degrees to ensure the ball never travels exactly
+        horizontally (which would cause infinite wall-to-wall loops).
+        """
+        BOUNCE_OFFSET = math.radians(5)  # 5 degrees
+
+        if self.angle < math.pi:
+            self.angle = math.pi - self.angle
+        else:
+            self.angle = (TWO_PI - self.angle) + math.pi
+
+        # Nudge 5 degrees away from horizontal.  The direction of the
+        # nudge is chosen so the ball moves toward the centre of the
+        # play area (away from whichever wall it just hit).
+        if math.pi / 2 < self.angle < 3 * math.pi / 2:
+            # Ball was going left, hit left wall, now going right —
+            # push slightly downward (toward centre).
+            self.angle += BOUNCE_OFFSET
+        else:
+            # Ball was going right, hit right wall, now going left —
+            # push slightly upward (toward centre).
+            self.angle -= BOUNCE_OFFSET
 
     def _calc_new_angle(self, rects):
         """Calculate the default angle of bounce of the ball, given a
@@ -429,6 +504,50 @@ class Ball(pygame.sprite.Sprite):
             tr = tr or rect.collidepoint(self.rect.topright)
             bl = bl or rect.collidepoint(self.rect.bottomleft)
             br = br or rect.collidepoint(self.rect.bottomright)
+
+        # Seam promotion: when exactly one corner is inside a rect but
+        # the ball overlaps multiple rects that form a continuous surface
+        # (e.g. a row of gold bricks), the single corner is a false
+        # "corner collision" caused by the microscopic gap between
+        # adjacent bricks.  Detect this and promote to a pair so we get
+        # a normal surface bounce.
+        if [tl, tr, bl, br].count(True) == 1 and len(rects) > 1:
+            for rect in rects:
+                hit = (rect.collidepoint(self.rect.topleft),
+                       rect.collidepoint(self.rect.topright),
+                       rect.collidepoint(self.rect.bottomleft),
+                       rect.collidepoint(self.rect.bottomright))
+                if not any(hit):
+                    continue
+                for other in rects:
+                    if other is rect:
+                        continue
+                    # Horizontally adjacent (same row, edges touch).
+                    same_row = abs(rect.top - other.top) < 4
+                    edges_touch = (abs(rect.right - other.left) < 4
+                                   or abs(other.right - rect.left) < 4)
+                    if same_row and edges_touch:
+                        if hit[0]:
+                            tr = True
+                        if hit[1]:
+                            tl = True
+                        if hit[2]:
+                            br = True
+                        if hit[3]:
+                            bl = True
+                    # Vertically adjacent (same column, edges touch).
+                    same_col = abs(rect.left - other.left) < 4
+                    v_touch = (abs(rect.bottom - other.top) < 4
+                               or abs(other.bottom - rect.top) < 4)
+                    if same_col and v_touch:
+                        if hit[0]:
+                            bl = True
+                        if hit[1]:
+                            br = True
+                        if hit[2]:
+                            tl = True
+                        if hit[3]:
+                            tr = True
 
         if [tl, tr, bl, br].count(True) == 1:
             # Corner collision, so work out whether this is a head on

@@ -11,7 +11,8 @@ import pygame
 
 from arkanoid.event import receiver
 from arkanoid.rounds.round1 import Round1
-from arkanoid.sound import (play_block_hit, play_enemy_explode,
+from arkanoid.sound import (play_block_hit, play_boss_hit,
+                            play_enemy_explode, play_extra_life,
                             play_gold_block_hit, play_level_start,
                             play_intro, stop_music)
 from arkanoid.sprites.ball import Ball
@@ -911,6 +912,11 @@ class Game:
         # The game starts with a single ball in play initially.
         self.balls = [ball]
 
+        # Constrain the ball's horizontal travel to the paddle's range
+        # so it cannot get stuck between the paddle and a side wall.
+        ball.set_horizontal_bounds(self.paddle.area.left,
+                                   self.paddle.area.right)
+
         # The currently applied powerup, if any.
         self.active_powerup = None
 
@@ -1062,6 +1068,45 @@ class Game:
         self._update_sprites()
         self._update_lives()
 
+        # Handle boss projectiles (round 33) — only during active play.
+        if isinstance(self.state, RoundPlayState):
+            self._update_boss_projectiles()
+
+    def _update_boss_projectiles(self):
+        """Update and draw boss projectiles; check paddle collision."""
+        from arkanoid.sprites.brick import BossBrick
+        # Find the boss brick in the current round's bricks.
+        boss = None
+        for brick in self.round.bricks:
+            if isinstance(brick, BossBrick):
+                boss = brick
+                break
+        if boss is None:
+            return
+
+        # Ensure the boss knows where the paddle is.
+        boss.set_paddle(self.paddle)
+
+        # Erase old projectile positions.
+        for proj in boss.projectiles:
+            self._screen.blit(self.round.background, proj.rect, proj.rect)
+
+        boss.projectiles.update()
+
+        # Draw projectiles and check paddle collision.
+        for proj in list(boss.projectiles):
+            if not proj.visible:
+                boss.projectiles.remove(proj)
+                continue
+            self._screen.blit(proj.image, proj.rect)
+            if proj.rect.colliderect(self.paddle.rect):
+                # Projectile hit the paddle — lose a life.
+                proj.visible = False
+                boss.projectiles.remove(proj)
+                self.lives -= 1
+                if self.lives <= 0:
+                    self.state = GameEndState(self)
+
     def _draw_pause_overlay(self):
         """Draw the in-game pause overlay.
 
@@ -1210,7 +1255,8 @@ class Game:
         """
         # Erase.
         for sprite in self.sprites:
-            self._screen.blit(self.round.background, sprite.rect, sprite.rect)
+            if sprite.visible and sprite.image is not None:
+                self._screen.blit(self.round.background, sprite.rect, sprite.rect)
 
         # Update all sprites first so positions are current.
         for sprite in self.sprites:
@@ -1401,6 +1447,7 @@ class Game:
             self.lives += 1
             self._next_extra_life += 60000
             self._update_lives()
+            play_extra_life()
 
     def on_brick_collide(self, brick, sprite):
         """Called by a sprite when it collides with a brick.
@@ -1423,7 +1470,11 @@ class Game:
             self._brick_timer = 0
 
         # Play the appropriate brick-hit sound.
-        if brick.colour == BrickColour.gold or \
+        from arkanoid.sprites.brick import BossBrick
+        if isinstance(brick, BossBrick):
+            play_boss_hit()
+            brick.flash()
+        elif brick.colour == BrickColour.gold or \
                 (brick.colour == BrickColour.silver and
                  brick.collision_count == 1):
             play_gold_block_hit()
@@ -2030,6 +2081,14 @@ class RoundRestartState(RoundStartState):
         # Clear stale enemy references so new enemies are created
         # via on_brick_collide when the round resumes.
         self.game.enemies.clear()
+
+        # Clear boss projectiles so they don't appear halfway on restart.
+        from arkanoid.sprites.brick import BossBrick
+        for brick in self.game.round.bricks:
+            if isinstance(brick, BossBrick):
+                brick.projectiles.empty()
+                brick._shoot_burst = 3  # reset to initial pause state
+                brick._shoot_timer = 0
 
         # Whether the enemies have been re-released for this round restart.
         self._enemies_rereleased = False

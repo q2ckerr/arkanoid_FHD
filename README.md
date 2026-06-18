@@ -36,6 +36,46 @@ Four new rounds have been added on top of the upstream four (and the existing ro
 
 Eleven additional rounds (10–20) with layouts taken from the original Arkanoid stages. Each level uses the next enemy type and background in rotation (cone → pyramid → molecule → cube for enemies; hex → circles → rects → chevrons for backgrounds). Silver brick durability now scales with the round number (2 hits for rounds 1–8, +1 every 8 rounds).
 
+### New levels: 21–33 (boss fight)
+
+Thirteen additional rounds (21–33) continuing the layout rotation. Round 33 is a boss fight featuring a large DOH brick that fires projectiles at the paddle. The boss takes 50 hits to destroy; projectiles that hit the paddle cost a life. Boss projectile handling, hit sounds, and round-restart cleanup are included.
+
+### Boss brick (Round 33)
+
+A new `BossBrick` class fires projectiles from the top of the screen toward the paddle. Projectiles are updated and drawn each frame, and collision with the paddle triggers a life loss. The boss flashes when hit and plays a distinct sound. On round restart, projectiles are cleared and the burst counter is reset.
+
+### Ball horizontal bounds
+
+The ball's horizontal travel is now clamped to the paddle's movement range (between the side walls). This prevents the ball from getting stuck in the narrow gap between the paddle and a side wall — a situation that previously caused the ball to loop horizontally forever.
+
+### Ball brick-seam bounce fix
+
+The ball no longer bounces backward when it strikes the seam between two adjacent bricks in a row. When exactly one ball corner lands inside a brick but the ball overlaps multiple adjacent bricks forming a continuous surface, the collision is promoted to a surface bounce instead of a corner bounce. This eliminates "phantom corner" reversals at brick joints.
+
+### Ball wall-bounce: always angled
+
+After every bounce off a vertical surface (side walls or horizontal bounds), 5 degrees are added to the bounce angle to ensure the ball never travels exactly horizontally. This prevents infinite wall-to-wall bouncing loops. The nudge direction is chosen so the ball moves toward the centre of the play area.
+
+### Paddle bounce: 30° at edges
+
+The maximum deflection angle off the paddle is now ±60° (30° from horizontal) on the left and right quarters of the paddle width, up from ±75° (15°). The centre 60% still sends the ball straight up. This gives the player more control over steep angles.
+
+### Enemy movement overhaul
+
+Enemies now distinguish between walls (SideEdge / TopEdge) and bricks. Wall collisions always push the enemy away from the wall; brick collisions allow the enemy to continue upward (since bricks can be destroyed by the ball). A stale-position detector forces horizontal movement if the enemy hasn't moved 4px in 30 frames. A collision-streak counter (60 frames) forces upward escape from wide U-shaped traps. Enemies separate from each other when overlapping (proportional nudge). Enemy `image` is loaded immediately in `__init__` instead of waiting for the first `update()` call.
+
+### Powerup image fix
+
+Powerup `image` is now loaded in `__init__` (with a `StopIteration` fallback for empty sequences) instead of being set to `None`. This prevents a `TypeError` when the sprite is drawn before its first `update()`.
+
+### Enemy paddle collision fix
+
+The paddle collision check now runs before the vertical clamp, so enemies can reach the paddle level and be destroyed by it. The clamp still prevents enemies from going below the paddle.
+
+### Gold brick assets renamed
+
+Gold brick images renamed from `brick_gold_01.png` … `brick_gold_09.png` to `brick_gold_1.png` … `brick_gold_9.png` for consistency.
+
 ### Sound effects
 
 The game includes sound effects loaded from `arkanoid/data/sound/`. Sounds play for brick hits (with a distinct tone for gold and first-hit silver bricks), paddle bounces, enemy explosions, laser fire, powerup collection and round transitions. Rapid re-triggers of the same sound stop the previous instance to avoid overlap.
@@ -66,7 +106,7 @@ Pressing **Esc** or **Alt+F4** opens a "Quit game? Y / N" confirmation overlay i
 
 ### Paddle bounce angle
 
-The ball bounce angle off the paddle is continuous and depends on where the ball strikes. The centre 60% sends the ball straight up; the outer 20% on each side produces the maximum deflection (±50°).
+The ball bounce angle off the paddle is continuous and depends on where the ball strikes. The centre 60% sends the ball straight up; the outer 25% on each side produces the maximum deflection (±60°, i.e. 30° from horizontal).
 
 ### Paddle and ball speed
 
@@ -102,26 +142,6 @@ The game can be paused at any time during a round by pressing **P** on the keybo
 
 In addition to the arrow keys, the paddle can be controlled with **A** (left) and **D** (right) on the keyboard, matching the layout used by many other arcade / breakout-style games. Arrow keys and A / D can be mixed freely (e.g. press A to move left while still holding the right arrow).
 
-
-## Start
-
-![Start](./docs/img/start.gif "Start")
-
-## Round 1
-
-![Round 1](./docs/img/round1.gif "Round 1")
-
-## Round 2
-
-![Round 2](./docs/img/round2.gif "Round 2")
-
-## Round 3
-
-![Round 3](./docs/img/round3.gif "Round 3")
-
-## Round 4
-
-![Round 4](./docs/img/round4.gif "Round 4")
 
 
 
@@ -224,6 +244,6 @@ If no controller is connected the gamepad wrapper reports a centred stick and no
 ## Author
 
 Will Keeling (original);
-Q2ckerr: gamepad support, resolution scaling, levels 6-20, pause mode, A/D keyboard controls, sound effects, shadows, decorative backgrounds, round transitions, enemy AI improvements, extra lives, intro music, gold brick timeout, typewriter prologue, quit confirmation, paddle bounce rework, speed adjustments and extra life display added in this fork.
+Q2ckerr: gamepad support, resolution scaling, levels 6-33, boss fight, pause mode, A/D keyboard controls, sound effects, shadows, decorative backgrounds, round transitions, enemy AI overhaul, extra lives, intro music, gold brick timeout, typewriter prologue, quit confirmation, paddle bounce rework, speed adjustments, extra life display, ball bounds and seam fixes, wall-bounce angling added in this fork.
 
 Last updated: 2026-06-18

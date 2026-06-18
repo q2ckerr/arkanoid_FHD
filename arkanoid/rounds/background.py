@@ -272,3 +272,97 @@ def create_chevron_background(screen, edges):
     background.blit(glow, play_rect.topleft,
                     special_flags=pygame.BLEND_RGBA_ADD)
     return background
+
+
+# ---------------------------------------------------------------------------
+#  5. Perspective grid room – boss background (red / purple)
+# ---------------------------------------------------------------------------
+
+def create_boss_background(screen, edges):
+    """Red-purple perspective grid room with a vanishing point in the centre."""
+    from arkanoid.game import LAYOUT
+
+    background = pygame.Surface(screen.get_size())
+    background = background.convert()
+    background.fill((0, 0, 0))
+
+    play_rect, pw, ph = _play_rect(edges, screen.get_size())
+    # Dark red-purple base.
+    background.fill((30, 5, 20), play_rect)
+
+    lw = max(1, LAYOUT.s(1))
+    cx = pw // 2
+    cy = int(ph * 0.42)          # vanishing point slightly above centre
+    line_col = (100, 20, 80)     # purple grid lines
+    bright = (160, 40, 120)      # brighter accent
+
+    grid = pygame.Surface((pw, ph), pygame.SRCALPHA)
+
+    # --- Floor grid (below the vanishing point) ---
+    # Horizontal lines spread wider as they approach the bottom.
+    num_h = 20
+    for i in range(num_h + 1):
+        t = i / num_h                         # 0 = vanishing point, 1 = bottom
+        y = int(cy + t * (ph - cy))
+        spread = int(t * pw * 0.6)
+        col = bright if i % 4 == 0 else line_col
+        pygame.draw.line(grid, col, (cx - spread, y), (cx + spread, y), lw)
+
+    # Vertical lines radiate from the vanishing point to the bottom edge.
+    num_v_floor = 14
+    for i in range(num_v_floor):
+        angle = math.radians(60 + i * (60 / (num_v_floor - 1)))
+        ex = cx + int(math.cos(angle) * pw)
+        ey = cy + int(math.sin(angle) * ph)
+        col = bright if i % 3 == 0 else line_col
+        pygame.draw.line(grid, col, (cx, cy), (ex, ey), lw)
+
+    # --- Ceiling grid (above the vanishing point) ---
+    num_hc = 12
+    for i in range(num_hc + 1):
+        t = i / num_hc
+        y = int(cy - t * cy)
+        spread = int(t * pw * 0.6)
+        col = bright if i % 4 == 0 else line_col
+        pygame.draw.line(grid, col, (cx - spread, y), (cx + spread, y), lw)
+
+    # Vertical lines radiate upward from the vanishing point.
+    num_v_ceil = 14
+    for i in range(num_v_ceil):
+        angle = math.radians(240 + i * (60 / (num_v_ceil - 1)))
+        ex = cx + int(math.cos(angle) * pw)
+        ey = cy + int(math.sin(angle) * ph)
+        col = bright if i % 3 == 0 else line_col
+        pygame.draw.line(grid, col, (cx, cy), (ex, ey), lw)
+
+    # --- Left wall vertical lines ---
+    left_x = int(pw * 0.08)
+    num_left = 8
+    for i in range(num_left):
+        t = i / (num_left - 1)
+        y_top = int(cy - t * cy * 0.6)
+        y_bot = int(cy + t * (ph - cy) * 0.6)
+        x = int(left_x * (1 - t * 0.3))
+        col = bright if i % 2 == 0 else line_col
+        pygame.draw.line(grid, col, (x, y_top), (x, y_bot), lw)
+
+    # --- Right wall vertical lines ---
+    right_x = int(pw * 0.92)
+    num_right = 8
+    for i in range(num_right):
+        t = i / (num_right - 1)
+        y_top = int(cy - t * cy * 0.6)
+        y_bot = int(cy + t * (ph - cy) * 0.6)
+        x = int(right_x + (pw - right_x) * t * 0.3)
+        col = bright if i % 2 == 0 else line_col
+        pygame.draw.line(grid, col, (x, y_top), (x, y_bot), lw)
+
+    background.blit(grid, play_rect.topleft,
+                    special_flags=pygame.BLEND_RGBA_ADD)
+
+    # Radial glow in red-purple.
+    glow = _radial_glow(pw, ph,
+                        lambda t: (int(100 * t), 0, int(60 * t)))
+    background.blit(glow, play_rect.topleft,
+                    special_flags=pygame.BLEND_RGBA_ADD)
+    return background
