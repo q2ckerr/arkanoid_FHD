@@ -248,6 +248,10 @@ class Paddle(pygame.sprite.Sprite):
         Returns:
             The angle of bounce in radians.
         """
+        # Minimum angle offset (degrees) to ensure the ball never
+        # bounces strictly vertically — even from the paddle centre.
+        MIN_OFFSET_DEG = 5
+
         # Ball offset from paddle centre, normalised to -1..1.
         paddle_cx = paddle_rect.centerx
         half_w = paddle_rect.width / 2.0
@@ -261,6 +265,14 @@ class Paddle(pygame.sprite.Sprite):
         # horizontal) on the left and right quarters of the paddle.
         MAX_DEFLECT = 60  # degrees
         angle_deg = 270 + (MAX_DEFLECT * t * (1 if offset >= 0 else -1))
+
+        # Ensure the ball never bounces strictly vertically.
+        # If the angle is within MIN_OFFSET_DEG of 270°, push it away.
+        deviation = abs(angle_deg - 270)
+        if deviation < MIN_OFFSET_DEG:
+            # Nudge toward the side the ball came from (or right by default).
+            direction = -1 if offset < 0 else 1
+            angle_deg = 270 + direction * MIN_OFFSET_DEG
 
         return math.radians(angle_deg)
 

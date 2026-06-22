@@ -27,7 +27,7 @@ LAYOUT = [
     # Row 1
     [None, None, None, None, None, None, None, None, None, None, None, None, None],
     # Row 2
-    [None, 'gold', None, None, None, None, None, None, None, None, None, None, None],
+    [None, None, None, None, None, None, None, None, None, None, None, None, None],
     # Row 3
     [None, 'gold', None, None, None, None, None, None, None, None, None, None, None],
     # Row 4

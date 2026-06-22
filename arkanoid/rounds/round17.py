@@ -46,7 +46,7 @@ class Round17(BaseRound):
     def __init__(self, top_offset):
         super().__init__(top_offset)
         self.name = 'Round 17'
-        self.next_round = None
+        self.next_round = Round18
         self.enemy_type = EnemyType.cube
         self.num_enemies = 3
 

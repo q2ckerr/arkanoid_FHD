@@ -46,7 +46,7 @@ class Round16(BaseRound):
     def __init__(self, top_offset):
         super().__init__(top_offset)
         self.name = 'Round 16'
-        self.next_round = None
+        self.next_round = Round17
         self.enemy_type = EnemyType.molecule
         self.num_enemies = 3
 

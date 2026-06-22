@@ -279,8 +279,8 @@ class TestPaddle(TestCase):
 
         self.assertEqual(angles[0], 210)
         self.assertEqual(angles[1], 210)
-        self.assertEqual(angles[2], 270)
-        self.assertEqual(angles[3], 270)
+        self.assertEqual(angles[2], 265)
+        self.assertEqual(angles[3], 275)
         self.assertEqual(angles[4], 330)
         self.assertEqual(angles[5], 330)
 
